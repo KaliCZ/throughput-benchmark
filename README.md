@@ -26,9 +26,12 @@ dotnet run --project ThroughputBenchmark.AppHost
 
 ## Benchmark results
 
-Default config (3 workers, 1 generator, one consumer/in-flight per core). Numbers are the
-run's averages: **processed/sec** = `averagePerSecond` from the page; **enqueued/sec** =
-enqueued total ÷ elapsed. Add a row per machine.
+Default config (3 workers, 1 generator, one consumer/in-flight per **logical processor** —
+i.e. `Environment.ProcessorCount`, which counts SMT threads, not physical cores). On chips
+without SMT (the Snapdragon and the Core Ultra) threads = cores; the SMT-enabled Ryzen runs
+at **32-way** parallelism (16 cores × 2 threads), so its per-process consumer/generator count
+is double what the core figure suggests. Numbers are the run's averages: **processed/sec** =
+`averagePerSecond` from the page; **enqueued/sec** = enqueued total ÷ elapsed. Add a row per machine.
 
 ### 1 minute — plugged in
 
@@ -36,7 +39,7 @@ enqueued total ÷ elapsed. Add a row per machine.
 |---|---|---|
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,751 | 7,591 |
 | **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | 1,451 | 4,123 |
-| **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores | 4,087 | 4,648 |
+| **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores / 32 threads | 4,087 | 4,648 |
 
 ### 1 minute — on battery
 
@@ -44,7 +47,7 @@ enqueued total ÷ elapsed. Add a row per machine.
 |---|---|---|---|
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,366 | 7,812 | 1% |
 | **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | 1,619 | 4,152 | 1% |
-| **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores | 3,758 | 4,191 | 2% |
+| **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores / 32 threads | 3,758 | 4,191 | 2% |
 
 ### 20 minutes — on battery, lowest screen brightness
 
