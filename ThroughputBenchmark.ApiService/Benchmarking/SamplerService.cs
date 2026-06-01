@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using ThroughputBenchmark.ApiService.Messaging;
 using ThroughputBenchmark.Shared.Domain;
 
 namespace ThroughputBenchmark.ApiService.Benchmarking;
@@ -21,6 +22,7 @@ public sealed class SamplerService(
     BenchmarkState state,
     IServiceScopeFactory scopeFactory,
     SystemMetrics systemMetrics,
+    RabbitMqPublisher publisher,
     ILogger<SamplerService> logger) : BackgroundService
 {
     public const int IntervalSeconds = 1;
@@ -81,13 +83,31 @@ public sealed class SamplerService(
                     OrdersEnqueuedTotal = enqueued,
                     OrdersEnqueuedDelta = enqueued - lastEnqueued,
                     CpuPercent = sys.CpuPercent,
-                    CpuTempC = sys.CpuTempC,
                     PowerWatts = sys.PowerWatts,
                     BatteryPercent = sys.BatteryPercent,
                 });
                 await db.SaveChangesAsync(stoppingToken);
 
                 lastEnqueued = enqueued;
+
+                // Fixed-duration run (the "Run 1 min" / "Run 30 min" buttons): once the deadline
+                // passes, end the run exactly like "Stop & purge" — stop producing, drop the
+                // backlog, close the run. The sample above captured the final window first.
+                if (run.EndsAt is { } deadline && boundary >= deadline)
+                {
+                    state.StopProducing();
+                    await publisher.PurgeAsync();
+                    state.Stop();
+
+                    var dbRun = await db.BenchmarkRuns.FindAsync([run.Id], stoppingToken);
+                    if (dbRun is not null)
+                    {
+                        dbRun.Status = RunStatus.Stopped;
+                        dbRun.StoppedAt = DateTimeOffset.UtcNow;
+                        await db.SaveChangesAsync(stoppingToken);
+                    }
+                    logger.LogInformation("Benchmark run {RunId} auto-stopped at its scheduled deadline", run.Id);
+                }
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)

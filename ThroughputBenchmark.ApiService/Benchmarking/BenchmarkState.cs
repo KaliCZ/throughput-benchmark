@@ -13,10 +13,14 @@ namespace ThroughputBenchmark.ApiService.Benchmarking;
 /// </summary>
 public sealed class BenchmarkState
 {
-    public sealed class RunInfo(Guid id, DateTimeOffset startedAt)
+    public sealed class RunInfo(Guid id, DateTimeOffset startedAt, DateTimeOffset? endsAt)
     {
         public Guid Id { get; } = id;
         public DateTimeOffset StartedAt { get; } = startedAt;
+
+        /// <summary>For a fixed-duration run, when the sampler should auto-stop it; null = open-ended.</summary>
+        public DateTimeOffset? EndsAt { get; } = endsAt;
+
         public long Enqueued;
         public volatile bool Producing = true;
     }
@@ -25,8 +29,8 @@ public sealed class BenchmarkState
 
     public RunInfo? Current => Volatile.Read(ref _current);
 
-    public void Start(Guid id, DateTimeOffset startedAt)
-        => Volatile.Write(ref _current, new RunInfo(id, startedAt));
+    public void Start(Guid id, DateTimeOffset startedAt, DateTimeOffset? endsAt = null)
+        => Volatile.Write(ref _current, new RunInfo(id, startedAt, endsAt));
 
     /// <summary>Stop accepting/generating new orders, but keep the run (and sampler) alive.</summary>
     public void StopProducing()

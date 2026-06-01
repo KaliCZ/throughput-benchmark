@@ -122,7 +122,6 @@ public class BenchmarkSample
 
     // Host system metrics at sample time (null when the platform doesn't expose them).
     public double? CpuPercent { get; set; }
-    public double? CpuTempC { get; set; }
     public double? PowerWatts { get; set; }
     public int? BatteryPercent { get; set; }
 }

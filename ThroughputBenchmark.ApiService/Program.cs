@@ -40,20 +40,26 @@ await app.Services.GetRequiredService<RabbitMqPublisher>().InitializeAsync();
 
 // ---- Benchmark control ----
 
-app.MapPost("/api/benchmark/start", async (BenchmarkState state, BenchmarkDbContext db) =>
+// durationSeconds > 0 runs a fixed-length benchmark that the sampler auto-stops at the deadline
+// (the "Run 1 min" / "Run 30 min" buttons). durationSeconds = 0 is an open-ended run you stop
+// manually with the Stop buttons.
+app.MapPost("/api/benchmark/start", async (BenchmarkState state, BenchmarkDbContext db, int durationSeconds = 0) =>
 {
+    var startedAt = DateTimeOffset.UtcNow;
+    DateTimeOffset? endsAt = durationSeconds > 0 ? startedAt.AddSeconds(durationSeconds) : null;
+
     var run = new BenchmarkRun
     {
         Id = Guid.NewGuid(),
-        StartedAt = DateTimeOffset.UtcNow,
+        StartedAt = startedAt,
         Status = RunStatus.Running,
         MachineName = Environment.MachineName,
     };
     db.BenchmarkRuns.Add(run);
     await db.SaveChangesAsync();
 
-    state.Start(run.Id, run.StartedAt);
-    return Results.Ok(new { runId = run.Id, startedAt = run.StartedAt });
+    state.Start(run.Id, startedAt, endsAt);
+    return Results.Ok(new { runId = run.Id, startedAt, endsAt });
 });
 
 // Stop accepting/generating new orders, but keep workers draining the existing queue.
@@ -132,7 +138,6 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
             s.OrdersEnqueuedTotal,
             s.OrdersEnqueuedDelta,
             s.CpuPercent,
-            s.CpuTempC,
             s.PowerWatts,
             s.BatteryPercent,
         })
@@ -156,21 +161,38 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
         ? recent.Sum(x => x.OrdersProcessedDelta) / (double)(recent.Count * SamplerService.IntervalSeconds)
         : 0;
 
+    // Run-level energy + battery aggregates (from the raw 1s samples). Power is sampled once a
+    // second, so the energy integral is just sum(watts) * 1s, in watt-hours.
+    var powerSamples = raw.Where(x => x.PowerWatts.HasValue).Select(x => x.PowerWatts!.Value).ToList();
+    double? energyWh = powerSamples.Count > 0
+        ? Math.Round(powerSamples.Sum() * SamplerService.IntervalSeconds / 3600.0, 2)
+        : null;
+    var batterySamples = raw.Where(x => x.BatteryPercent.HasValue).Select(x => x.BatteryPercent!.Value).ToList();
+    int? batteryUsedPercent = batterySamples.Count >= 2
+        ? Math.Max(0, batterySamples[0] - batterySamples[^1])
+        : null;
+
     // Bucket the table rows: sum deltas over each window, totals = end of window.
     int g = Math.Max(1, bucket);
     var samples = raw
         .GroupBy(s => (int)Math.Ceiling(s.ElapsedSeconds / g))
-        .Select(grp => new
+        .Select(grp =>
         {
-            ElapsedSeconds = grp.Max(x => x.ElapsedSeconds),
-            OrdersProcessedTotal = grp.Last().OrdersProcessedTotal,
-            OrdersProcessedDelta = grp.Sum(x => x.OrdersProcessedDelta),
-            OrdersEnqueuedTotal = grp.Last().OrdersEnqueuedTotal,
-            OrdersEnqueuedDelta = grp.Sum(x => x.OrdersEnqueuedDelta),
-            CpuPercent = AvgOrNull(grp.Select(x => x.CpuPercent)),
-            CpuTempC = AvgOrNull(grp.Select(x => x.CpuTempC)),
-            PowerWatts = AvgOrNull(grp.Select(x => x.PowerWatts)),
-            BatteryPercent = grp.Last().BatteryPercent,
+            // Each raw sample covers IntervalSeconds, so a bucket spans Count * IntervalSeconds
+            // seconds. Divide the summed deltas by that span to get a per-second RATE (not a
+            // per-window total) — this also handles partial buckets like the final tick.
+            double secs = Math.Max(1, grp.Count() * SamplerService.IntervalSeconds);
+            return new
+            {
+                ElapsedSeconds = grp.Max(x => x.ElapsedSeconds),
+                OrdersProcessedPerSec = Math.Round(grp.Sum(x => x.OrdersProcessedDelta) / secs),
+                OrdersEnqueuedPerSec = Math.Round(grp.Sum(x => x.OrdersEnqueuedDelta) / secs),
+                OrdersProcessedTotal = grp.Last().OrdersProcessedTotal,
+                OrdersEnqueuedTotal = grp.Last().OrdersEnqueuedTotal,
+                CpuPercent = AvgOrNull(grp.Select(x => x.CpuPercent)),
+                PowerWatts = AvgOrNull(grp.Select(x => x.PowerWatts)),
+                BatteryPercent = grp.Last().BatteryPercent,
+            };
         })
         .ToList();
 
@@ -180,9 +202,12 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
         producing = run.Producing,
         runId = run.Id,
         startedAt = run.StartedAt,
+        endsAt = run.EndsAt,
         enqueued = Interlocked.Read(ref run.Enqueued),
         averagePerSecond = avgPerSec,
         recentPerSecond = recentPerSec,
+        energyWh,
+        batteryUsedPercent,
         intervalSeconds = SamplerService.IntervalSeconds,
         bucketSeconds = g,
         samples,

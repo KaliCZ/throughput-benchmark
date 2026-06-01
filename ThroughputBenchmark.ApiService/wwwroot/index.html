@@ -35,7 +35,8 @@
   <header><h1>⚡ Throughput Benchmark</h1></header>
   <main>
     <div class="controls">
-      <button id="startBtn" class="start">▶ Start</button>
+      <button id="start1Btn" class="start" title="Run a fixed 1-minute benchmark, then auto-stop">▶ Run 1 min</button>
+      <button id="start30Btn" class="start" title="Run a fixed 30-minute benchmark, then auto-stop">▶ Run 30 min</button>
       <button id="drainBtn" class="drain" disabled title="Stop generating load; let workers finish the queue">⏸ Stop load</button>
       <button id="stopBtn" class="stop" disabled title="Stop load and purge the queue so workers go idle">■ Stop &amp; purge</button>
       <button id="wipeBtn" class="wipe" title="Clear all order &amp; benchmark data (keeps seeded products/users)">🗑 Wipe DB</button>
@@ -54,6 +55,11 @@
       <div class="card"><div class="label">CPU %</div><div class="value" id="cpu">—</div></div>
       <div class="card"><div class="label">Battery %</div><div class="value" id="battery">—</div></div>
     </div>
+    <div class="cards">
+      <div class="card"><div class="label">Power now (W)</div><div class="value" id="powerNow">—</div></div>
+      <div class="card"><div class="label">Energy used (Wh)</div><div class="value" id="energy">—</div></div>
+      <div class="card"><div class="label">Battery used</div><div class="value" id="batteryUsed">—</div></div>
+    </div>
 
     <h3 style="display:flex; align-items:center; gap:0.8rem;">
       Samples <span class="muted" id="sampleNote"></span>
@@ -71,14 +77,15 @@
     </h3>
     <table>
       <thead>
-        <tr><th>Elapsed (s)</th><th>Processed Δ</th><th>Enqueued Δ</th><th>Processed total</th><th>Backlog</th><th>CPU %</th><th>Temp °C</th><th>Power W</th></tr>
+        <tr><th>Elapsed (s)</th><th>Processed/sec</th><th>Enqueued/sec</th><th>Processed total</th><th>Backlog</th><th>CPU %</th><th>Power W</th></tr>
       </thead>
-      <tbody id="rows"><tr><td colspan="8" class="muted">No samples yet.</td></tr></tbody>
+      <tbody id="rows"><tr><td colspan="7" class="muted">No samples yet.</td></tr></tbody>
     </table>
   </main>
 
   <script>
-    const startBtn = document.getElementById('startBtn');
+    const start1Btn = document.getElementById('start1Btn');
+    const start30Btn = document.getElementById('start30Btn');
     const drainBtn = document.getElementById('drainBtn');
     const stopBtn = document.getElementById('stopBtn');
     const wipeBtn = document.getElementById('wipeBtn');
@@ -104,7 +111,8 @@
       refresh();
     }
 
-    startBtn.onclick = () => post('/api/benchmark/start', startBtn);
+    start1Btn.onclick = () => post('/api/benchmark/start?durationSeconds=60', start1Btn);
+    start30Btn.onclick = () => post('/api/benchmark/start?durationSeconds=1800', start30Btn);
     drainBtn.onclick = () => post('/api/benchmark/stop-producing', drainBtn);
     stopBtn.onclick = () => post('/api/benchmark/stop', stopBtn);
     wipeBtn.onclick = async () => {
@@ -125,7 +133,8 @@
         if (!data.active) {
           statusPill.textContent = 'idle';
           statusPill.className = 'pill';
-          startBtn.disabled = false;
+          start1Btn.disabled = false;
+          start30Btn.disabled = false;
           drainBtn.disabled = true;
           stopBtn.disabled = true;
           wipeBtn.disabled = false;
@@ -134,9 +143,17 @@
         }
         interval = data.intervalSeconds || 1;
         const draining = !data.producing;
-        statusPill.textContent = draining ? 'draining queue' : 'running';
+        // For a fixed-duration run, show the time left until the auto-stop deadline.
+        let left = '';
+        if (data.endsAt && !draining) {
+          const secs = Math.max(0, Math.round((new Date(data.endsAt) - new Date()) / 1000));
+          const mm = Math.floor(secs / 60), ss = String(secs % 60).padStart(2, '0');
+          left = ` · ${mm}:${ss} left`;
+        }
+        statusPill.textContent = (draining ? 'draining queue' : 'running') + left;
         statusPill.className = draining ? 'pill drain' : 'pill on';
-        startBtn.disabled = true;
+        start1Btn.disabled = true;
+        start30Btn.disabled = true;
         drainBtn.disabled = draining;   // already draining
         stopBtn.disabled = false;
         wipeBtn.disabled = true;        // can't wipe mid-run
@@ -154,6 +171,9 @@
         document.getElementById('last10').textContent = fmt(Math.round(data.recentPerSecond || 0));
         document.getElementById('cpu').textContent = last && last.cpuPercent != null ? last.cpuPercent.toFixed(0) + '%' : '—';
         document.getElementById('battery').textContent = last && last.batteryPercent != null ? last.batteryPercent + '%' : '—';
+        document.getElementById('powerNow').textContent = last && last.powerWatts != null ? last.powerWatts.toFixed(1) : '—';
+        document.getElementById('energy').textContent = data.energyWh != null ? data.energyWh.toFixed(2) : '—';
+        document.getElementById('batteryUsed').textContent = data.batteryUsedPercent != null ? data.batteryUsedPercent + '%' : '—';
         const bucket = data.bucketSeconds || 1;
         const mode = auto ? 'auto ' : '';
         document.getElementById('sampleNote').textContent =
@@ -161,17 +181,16 @@
 
         const rows = document.getElementById('rows');
         if (samples.length === 0) {
-          rows.innerHTML = '<tr><td colspan="8" class="muted">Waiting for first sample…</td></tr>';
+          rows.innerHTML = '<tr><td colspan="7" class="muted">Waiting for first sample…</td></tr>';
         } else {
           rows.innerHTML = samples.slice().reverse().map(s => `
             <tr>
               <td>${Math.round(s.elapsedSeconds)}</td>
-              <td>${fmt(s.ordersProcessedDelta)}</td>
-              <td>${fmt(s.ordersEnqueuedDelta)}</td>
+              <td>${fmt(s.ordersProcessedPerSec)}</td>
+              <td>${fmt(s.ordersEnqueuedPerSec)}</td>
               <td>${fmt(s.ordersProcessedTotal)}</td>
               <td>${fmt(Math.max(0, s.ordersEnqueuedTotal - s.ordersProcessedTotal))}</td>
               <td>${s.cpuPercent == null ? '—' : s.cpuPercent.toFixed(0) + '%'}</td>
-              <td>${s.cpuTempC == null ? '—' : s.cpuTempC.toFixed(0)}</td>
               <td>${s.powerWatts == null ? '—' : s.powerWatts.toFixed(1)}</td>
             </tr>`).join('');
         }
