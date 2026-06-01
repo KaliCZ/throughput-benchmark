@@ -38,8 +38,7 @@
       <button id="start1Btn" class="start" title="Run a fixed 1-minute benchmark, then auto-stop">▶ Run 1 min</button>
       <button id="start30Btn" class="start" title="Run a fixed 30-minute benchmark, then auto-stop">▶ Run 30 min</button>
       <button id="startOpenBtn" class="start" title="Run with no time limit; stop manually">▶ Run (no limit)</button>
-      <button id="drainBtn" class="drain" disabled title="Stop generating load; let workers finish the queue">⏸ Stop load</button>
-      <button id="stopBtn" class="stop" disabled title="Stop load and purge the queue so workers go idle">■ Stop &amp; purge</button>
+      <button id="stopBtn" class="stop" disabled title="Stop the run and purge the queue so workers go idle">■ Stop</button>
       <button id="wipeBtn" class="wipe" title="Clear all order &amp; benchmark data (keeps seeded products/users)">🗑 Wipe DB</button>
       <span id="statusPill" class="pill">idle</span>
     </div>
@@ -84,7 +83,6 @@
     const start1Btn = document.getElementById('start1Btn');
     const start30Btn = document.getElementById('start30Btn');
     const startOpenBtn = document.getElementById('startOpenBtn');
-    const drainBtn = document.getElementById('drainBtn');
     const stopBtn = document.getElementById('stopBtn');
     const wipeBtn = document.getElementById('wipeBtn');
     const statusPill = document.getElementById('statusPill');
@@ -112,7 +110,6 @@
     start1Btn.onclick = () => post('/api/benchmark/start?durationSeconds=60', start1Btn);
     start30Btn.onclick = () => post('/api/benchmark/start?durationSeconds=1800', start30Btn);
     startOpenBtn.onclick = () => post('/api/benchmark/start', startOpenBtn);
-    drainBtn.onclick = () => post('/api/benchmark/stop-producing', drainBtn);
     stopBtn.onclick = () => post('/api/benchmark/stop', stopBtn);
     wipeBtn.onclick = async () => {
       if (!confirm('Wipe all order & benchmark data? (Seeded products/users are kept.)')) return;
@@ -135,27 +132,24 @@
           start1Btn.disabled = false;
           start30Btn.disabled = false;
           startOpenBtn.disabled = false;
-          drainBtn.disabled = true;
           stopBtn.disabled = true;
           wipeBtn.disabled = false;
           lastElapsed = 0;
           return;
         }
         interval = data.intervalSeconds || 1;
-        const draining = !data.producing;
         // For a fixed-duration run, show the time left until the auto-stop deadline.
         let left = '';
-        if (data.endsAt && !draining) {
+        if (data.endsAt) {
           const secs = Math.max(0, Math.round((new Date(data.endsAt) - new Date()) / 1000));
           const mm = Math.floor(secs / 60), ss = String(secs % 60).padStart(2, '0');
           left = ` · ${mm}:${ss} left`;
         }
-        statusPill.textContent = (draining ? 'draining queue' : 'running') + left;
-        statusPill.className = draining ? 'pill drain' : 'pill on';
+        statusPill.textContent = 'running' + left;
+        statusPill.className = 'pill on';
         start1Btn.disabled = true;
         start30Btn.disabled = true;
         startOpenBtn.disabled = true;
-        drainBtn.disabled = draining;   // already draining
         stopBtn.disabled = false;
         wipeBtn.disabled = true;        // can't wipe mid-run
 
@@ -172,7 +166,17 @@
         document.getElementById('last10').textContent = fmt(Math.round(data.recentPerSecond || 0));
         document.getElementById('cpu').textContent = last && last.cpuPercent != null ? last.cpuPercent.toFixed(0) + '%' : '—';
         document.getElementById('battery').textContent = last && last.batteryPercent != null ? last.batteryPercent + '%' : '—';
-        document.getElementById('batteryUsed').textContent = data.batteryUsedPercent != null ? data.batteryUsedPercent + '%' : '—';
+        const bu = document.getElementById('batteryUsed');
+        if (data.batteryChargedDuringRun) {
+          bu.textContent = '⚠';
+          bu.title = 'Plugged into AC / charged during the run — battery drain is not a valid measurement. Run unplugged from start to finish.';
+        } else if (data.batteryUsedPercent != null) {
+          bu.textContent = data.batteryUsedPercent + '%';
+          bu.title = '';
+        } else {
+          bu.textContent = '—';
+          bu.title = '';
+        }
         const bucket = data.bucketSeconds || 1;
         const mode = auto ? 'auto ' : '';
         document.getElementById('sampleNote').textContent =

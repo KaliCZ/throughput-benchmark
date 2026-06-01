@@ -5,11 +5,11 @@ namespace ThroughputBenchmark.ApiService.Benchmarking;
 /// The current run is held behind a single reference so reads on the hot path
 /// (every order request) are lock-free; we swap the reference atomically on start/stop.
 ///
-/// A run has two independent switches:
+/// A run has two switches:
 ///   * <see cref="RunInfo.Producing"/> — whether the API accepts new orders / generators send load.
 ///   * the run existing at all (<see cref="Current"/> != null) — whether the sampler is recording.
-/// "Stop load" flips Producing off but keeps the run alive so you can watch the queue drain.
-/// "Stop &amp; purge" ends the run entirely.
+/// Stop (and the fixed-duration auto-stop) flips Producing off, purges the queue, and ends the run
+/// in one step. Producing is flipped first so the API stops enqueuing before the purge — no race.
 /// </summary>
 public sealed class BenchmarkState
 {

@@ -123,4 +123,8 @@ public class BenchmarkSample
     // Host system metrics at sample time (null when the platform doesn't expose them).
     public double? CpuPercent { get; set; }
     public int? BatteryPercent { get; set; }
+
+    /// <summary>True if plugged into AC at sample time — used to invalidate the battery-drain
+    /// figure when the machine was charging/plugged in during the run.</summary>
+    public bool? OnAcPower { get; set; }
 }

@@ -84,6 +84,7 @@ public sealed class SamplerService(
                     OrdersEnqueuedDelta = enqueued - lastEnqueued,
                     CpuPercent = sys.CpuPercent,
                     BatteryPercent = sys.BatteryPercent,
+                    OnAcPower = sys.OnAcPower,
                 });
                 await db.SaveChangesAsync(stoppingToken);
 

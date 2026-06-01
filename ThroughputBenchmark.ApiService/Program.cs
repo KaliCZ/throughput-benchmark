@@ -62,13 +62,6 @@ app.MapPost("/api/benchmark/start", async (BenchmarkState state, BenchmarkDbCont
     return Results.Ok(new { runId = run.Id, startedAt, endsAt });
 });
 
-// Stop accepting/generating new orders, but keep workers draining the existing queue.
-app.MapPost("/api/benchmark/stop-producing", (BenchmarkState state) =>
-{
-    state.StopProducing();
-    return Results.Ok(new { producing = false });
-});
-
 // Stop everything: stop producing, purge the queue so workers go idle, end the run.
 app.MapPost("/api/benchmark/stop", async (BenchmarkState state, BenchmarkDbContext db, RabbitMqPublisher publisher) =>
 {
@@ -139,6 +132,7 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
             s.OrdersEnqueuedDelta,
             s.CpuPercent,
             s.BatteryPercent,
+            s.OnAcPower,
         })
         .ToListAsync();
     raw.Reverse();
@@ -161,8 +155,11 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
         : 0;
 
     // Run-level battery aggregate (from the raw 1s samples): charge % consumed start - end.
+    // Only valid for a pure on-battery run: if AC was connected at any sample (started/ended on
+    // AC, or charged mid-run), the delta is meaningless, so we flag it and withhold the number.
+    bool chargedDuringRun = raw.Any(x => x.OnAcPower == true);
     var batterySamples = raw.Where(x => x.BatteryPercent.HasValue).Select(x => x.BatteryPercent!.Value).ToList();
-    int? batteryUsedPercent = batterySamples.Count >= 2
+    int? batteryUsedPercent = (!chargedDuringRun && batterySamples.Count >= 2)
         ? Math.Max(0, batterySamples[0] - batterySamples[^1])
         : null;
 
@@ -200,6 +197,7 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
         averagePerSecond = avgPerSec,
         recentPerSecond = recentPerSec,
         batteryUsedPercent,
+        batteryChargedDuringRun = chargedDuringRun,
         intervalSeconds = SamplerService.IntervalSeconds,
         bucketSeconds = g,
         samples,

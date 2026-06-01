@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Management;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
@@ -7,14 +6,15 @@ using System.Text.RegularExpressions;
 namespace ThroughputBenchmark.ApiService.Benchmarking;
 
 /// <summary>Host system metrics sampled alongside throughput. Any value may be null when the
-/// platform doesn't expose it.</summary>
-public sealed record SystemSnapshot(double? CpuPercent, int? BatteryPercent);
+/// platform doesn't expose it. <see cref="OnAcPower"/> is true when plugged into AC (used to
+/// invalidate the battery-drain figure if the machine was charging during a run).</summary>
+public sealed record SystemSnapshot(double? CpuPercent, int? BatteryPercent, bool? OnAcPower);
 
 /// <summary>
-/// Reads system-wide CPU usage and battery charge %, per OS:
-///   * Windows — GetSystemTimes + WMI (Win32_Battery).
-///   * macOS   — host_statistics (Mach) for CPU, ioreg (AppleSmartBattery) for charge %.
-///   * Linux   — /proc/stat for CPU, /sys/class/power_supply for charge % (best-effort).
+/// Reads system-wide CPU usage, battery charge % and AC-power state, per OS:
+///   * Windows — GetSystemTimes + GetSystemPowerStatus.
+///   * macOS   — host_statistics (Mach) for CPU, ioreg (AppleSmartBattery) for charge % / AC.
+///   * Linux   — /proc/stat for CPU, /sys/class/power_supply for charge % / AC (best-effort).
 /// CPU% is a delta since the previous call, so it needs two ticks to produce a value.
 /// Not thread-safe — only the sampler calls <see cref="Read"/>, once a tick.
 /// </summary>
@@ -41,12 +41,21 @@ public sealed class SystemMetrics
     public SystemSnapshot Read()
     {
         if (OperatingSystem.IsWindows())
-            return new SystemSnapshot(CpuFromCumulative(ReadWindowsCpuTicks()), ReadWindowsBattery());
+        {
+            var (battery, onAc) = ReadWindowsBattery();
+            return new SystemSnapshot(CpuFromCumulative(ReadWindowsCpuTicks()), battery, onAc);
+        }
         if (OperatingSystem.IsMacOS())
-            return new SystemSnapshot(CpuFromCumulative(ReadMacCpuTicks()), ReadMacBattery());
+        {
+            var (battery, onAc) = ReadMacBattery();
+            return new SystemSnapshot(CpuFromCumulative(ReadMacCpuTicks()), battery, onAc);
+        }
         if (OperatingSystem.IsLinux())
-            return new SystemSnapshot(CpuFromCumulative(ReadLinuxCpuTicks()), ReadLinuxBattery());
-        return new SystemSnapshot(null, null);
+        {
+            var (battery, onAc) = ReadLinuxBattery();
+            return new SystemSnapshot(CpuFromCumulative(ReadLinuxCpuTicks()), battery, onAc);
+        }
+        return new SystemSnapshot(null, null, null);
     }
 
     // ===================== Windows =====================
@@ -70,18 +79,28 @@ public sealed class SystemMetrics
         return (total - i, total);
     }
 
-    [SupportedOSPlatform("windows")]
-    private static int? ReadWindowsBattery()
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SystemPowerStatus
     {
-        try
-        {
-            using var searcher = new ManagementObjectSearcher(
-                "SELECT EstimatedChargeRemaining FROM Win32_Battery");
-            foreach (ManagementBaseObject mo in searcher.Get())
-                if (mo["EstimatedChargeRemaining"] is { } v) return Convert.ToInt32(v);
-        }
-        catch { }
-        return null;
+        public byte ACLineStatus;        // 0 = on battery, 1 = on AC, 255 = unknown
+        public byte BatteryFlag;
+        public byte BatteryLifePercent;  // 0-100, 255 = unknown
+        public byte SystemStatusFlag;
+        public uint BatteryLifeTime;
+        public uint BatteryFullLifeTime;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetSystemPowerStatus(out SystemPowerStatus status);
+
+    [SupportedOSPlatform("windows")]
+    private static (int? percent, bool? onAc) ReadWindowsBattery()
+    {
+        if (!GetSystemPowerStatus(out var s)) return (null, null);
+        int? percent = s.BatteryLifePercent <= 100 ? s.BatteryLifePercent : null;
+        bool? onAc = s.ACLineStatus == 255 ? null : s.ACLineStatus == 1;
+        return (percent, onAc);
     }
 
     // ===================== macOS =====================
@@ -112,16 +131,18 @@ public sealed class SystemMetrics
     }
 
     [SupportedOSPlatform("macos")]
-    private static int? ReadMacBattery()
+    private static (int? percent, bool? onAc) ReadMacBattery()
     {
         var outp = RunCli("/usr/sbin/ioreg", "-rn AppleSmartBattery -w0");
-        if (outp is null) return null;
+        if (outp is null) return (null, null);
 
         int? cur = MatchInt(outp, "\"CurrentCapacity\"\\s*=\\s*(\\d+)");
         int? max = MatchInt(outp, "\"MaxCapacity\"\\s*=\\s*(\\d+)");
         // On Intel these are mAh; on Apple Silicon CurrentCapacity is already a %. The ratio
         // handles both (ARM: MaxCapacity=100, so cur*100/100 = cur).
-        return (cur is int c && max is int m && m > 0) ? (int)Math.Round(c * 100.0 / m) : cur;
+        int? percent = (cur is int c && max is int m && m > 0) ? (int)Math.Round(c * 100.0 / m) : cur;
+        bool? onAc = Regex.IsMatch(outp, "\"ExternalConnected\"\\s*=\\s*Yes");
+        return (percent, onAc);
     }
 
     // ===================== Linux (best-effort) =====================
@@ -144,8 +165,14 @@ public sealed class SystemMetrics
         catch { return null; }
     }
 
-    private static int? ReadLinuxBattery()
-        => ReadIntFile("/sys/class/power_supply/BAT0/capacity");
+    private static (int? percent, bool? onAc) ReadLinuxBattery()
+    {
+        int? percent = ReadIntFile("/sys/class/power_supply/BAT0/capacity");
+        int? ac = ReadIntFile("/sys/class/power_supply/AC/online")
+               ?? ReadIntFile("/sys/class/power_supply/ACAD/online")
+               ?? ReadIntFile("/sys/class/power_supply/AC0/online");
+        return (percent, ac is int a ? a == 1 : null);
+    }
 
     // ===================== helpers =====================
 
