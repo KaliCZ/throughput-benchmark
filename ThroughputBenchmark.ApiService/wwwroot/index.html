@@ -80,6 +80,14 @@
       </thead>
       <tbody id="rows"><tr><td colspan="6" class="muted">No samples yet.</td></tr></tbody>
     </table>
+
+    <h3 style="margin-top:2.5rem;">Past runs <span class="muted" style="font-size:0.85rem; font-weight:400;">(all recorded runs in this database)</span></h3>
+    <table>
+      <thead>
+        <tr><th>Started</th><th>Status</th><th>Duration</th><th>Avg processed/sec</th><th>Avg enqueued/sec</th><th>Battery used</th></tr>
+      </thead>
+      <tbody id="runsRows"><tr><td colspan="6" class="muted">No runs yet.</td></tr></tbody>
+    </table>
   </main>
 
   <script>
@@ -210,8 +218,33 @@
       } catch (e) { /* transient */ }
     }
 
+    function runBatteryCell(r) {
+      if (r.batteryChargedDuringRun)
+        return '<span title="Plugged into AC / charged during the run — drain not valid">⚠</span>';
+      return r.batteryUsedPercent != null ? r.batteryUsedPercent + '%' : '—';
+    }
+
+    async function fetchRuns() {
+      try {
+        const runs = await (await fetch('/api/benchmark/runs')).json();
+        const el = document.getElementById('runsRows');
+        if (!runs.length) { el.innerHTML = '<tr><td colspan="6" class="muted">No runs yet.</td></tr>'; return; }
+        el.innerHTML = runs.map(r => `
+          <tr>
+            <td>${new Date(r.startedAt).toLocaleString()}</td>
+            <td>${r.isActive ? 'running (live)' : r.status}</td>
+            <td>${fmtElapsed(r.elapsedSeconds)}</td>
+            <td>${fmt(r.avgProcessedPerSec)}</td>
+            <td>${fmt(r.avgEnqueuedPerSec)}</td>
+            <td>${runBatteryCell(r)}</td>
+          </tr>`).join('');
+      } catch (e) { /* transient */ }
+    }
+
     setInterval(refresh, 2000);
+    setInterval(fetchRuns, 3000);
     refresh();
+    fetchRuns();
   </script>
 </body>
 </html>

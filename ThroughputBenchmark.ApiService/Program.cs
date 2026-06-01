@@ -111,6 +111,62 @@ app.MapGet("/api/benchmark/status", (BenchmarkState state) =>
     });
 });
 
+// Summary of every recorded run (for the history view). Samples are 1/second, so this aggregate
+// stays cheap even though the Orders table is huge — the numbers come from BenchmarkSamples only.
+app.MapGet("/api/benchmark/runs", async (BenchmarkState state, BenchmarkDbContext db) =>
+{
+    var runs = await db.BenchmarkRuns
+        .OrderByDescending(r => r.StartedAt)
+        .Take(100)
+        .Select(r => new { r.Id, r.StartedAt, r.StoppedAt, r.Status })
+        .ToListAsync();
+
+    // One grouped pass over the (small) samples table: totals are monotonic, so MAX = final.
+    var agg = (await db.BenchmarkSamples
+        .GroupBy(s => s.RunId)
+        .Select(g => new
+        {
+            RunId = g.Key,
+            Processed = g.Max(s => s.OrdersProcessedTotal),
+            Enqueued = g.Max(s => s.OrdersEnqueuedTotal),
+            Elapsed = g.Max(s => s.ElapsedSeconds),
+            BattMax = g.Max(s => s.BatteryPercent),
+            BattMin = g.Min(s => s.BatteryPercent),
+        })
+        .ToListAsync()).ToDictionary(a => a.RunId);
+
+    var chargedRunIds = (await db.BenchmarkSamples
+        .Where(s => s.OnAcPower == true).Select(s => s.RunId).Distinct().ToListAsync()).ToHashSet();
+
+    var activeId = state.Current?.Id;
+
+    var result = runs.Select(r =>
+    {
+        agg.TryGetValue(r.Id, out var a);
+        double elapsed = a?.Elapsed ?? 0;
+        long processed = a?.Processed ?? 0;
+        long enqueued = a?.Enqueued ?? 0;
+        bool charged = chargedRunIds.Contains(r.Id);
+        int? battUsed = (!charged && a?.BattMax is int hi && a?.BattMin is int lo) ? Math.Max(0, hi - lo) : null;
+        return new
+        {
+            id = r.Id,
+            startedAt = r.StartedAt,
+            stoppedAt = r.StoppedAt,
+            status = r.Status.ToString(),
+            isActive = r.Id == activeId,
+            elapsedSeconds = Math.Round(elapsed, 1),
+            processedTotal = processed,
+            avgProcessedPerSec = Math.Round(processed / Math.Max(1, elapsed)),
+            avgEnqueuedPerSec = Math.Round(enqueued / Math.Max(1, elapsed)),
+            batteryUsedPercent = battUsed,
+            batteryChargedDuringRun = charged,
+        };
+    });
+
+    return Results.Ok(result);
+});
+
 // Current run + samples for the dashboard. `bucket` (seconds) downsamples the table for the
 // display only — the DB always keeps 1s resolution; the metric cards stay 1s-accurate.
 app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbContext db, int bucket = 1) =>
