@@ -47,8 +47,8 @@
       <div class="card"><div class="label">Enqueued</div><div class="value" id="enqueued">—</div></div>
       <div class="card"><div class="label">Processed</div><div class="value" id="processed">—</div></div>
       <div class="card"><div class="label">Queue backlog</div><div class="value" id="backlog">—</div></div>
-      <div class="card"><div class="label">Avg orders/sec</div><div class="value" id="avg">—</div></div>
-      <div class="card"><div class="label">Last interval/sec</div><div class="value" id="last">—</div></div>
+      <div class="card"><div class="label">Avg orders / 5s</div><div class="value" id="avg">—</div></div>
+      <div class="card"><div class="label">Last 5s (Δ)</div><div class="value" id="last">—</div></div>
     </div>
 
     <h3>Samples <span class="muted" id="sampleNote"></span></h3>
@@ -116,8 +116,8 @@
         document.getElementById('enqueued').textContent = fmt(data.enqueued);
         document.getElementById('processed').textContent = fmt(processedTotal);
         document.getElementById('backlog').textContent = fmt(backlog);
-        document.getElementById('avg').textContent = data.averagePerSecond.toFixed(1);
-        document.getElementById('last').textContent = last ? (last.ordersProcessedDelta / interval).toFixed(1) : '—';
+        document.getElementById('avg').textContent = fmt(Math.round(data.averagePerSecond * interval));
+        document.getElementById('last').textContent = last ? fmt(last.ordersProcessedDelta) : '—';
         document.getElementById('sampleNote').textContent = `(every ${interval}s)`;
 
         const rows = document.getElementById('rows');

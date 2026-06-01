@@ -119,8 +119,8 @@ bottleneck by design — that's the realistic signal. Tune via environment varia
 |---|---|---|
 | `Scale__ApiReplicas` | 1 | ASP.NET servers populating the queue *(keep at 1 — see note)* |
 | `Scale__WorkerReplicas` | 3 | **Worker processes** draining the queue (competing consumers, each its own connection + GC). The primary scaling lever. |
-| `Scale__GeneratorReplicas` | 1 | Console apps generating load (scale up if one generator can't keep the backlog growing) |
-| `Generator__Parallelism` | 64 | Concurrent in-flight requests per generator |
+| `Scale__GeneratorReplicas` | 3 | Generator **processes** spamming the API (horizontal, like the workers) |
+| `Generator__Parallelism` | CPU count | Concurrent in-flight requests per generator process |
 | `Worker__Consumers` | CPU count | Consumer threads **per worker process** — one per core, so each process already saturates the machine. Total worker concurrency = `WorkerReplicas × Consumers`. |
 | `Db__MaxPoolSize` | cores + 5 | Npgsql connection-pool cap per worker process (API uses 20). Keeps `replicas × pool` under Postgres `max_connections`. |
 | `Worker__Prefetch` | 50 | RabbitMQ prefetch per consumer channel |
@@ -174,9 +174,10 @@ of the workers — i.e. the **Queue backlog should keep growing** during a run. 
 goes flat, the generator has become the bottleneck and you're measuring producer rate, not
 worker rate. Scale the producer:
 
-- **`Generator__Parallelism`** (default 64) — more concurrent in-flight requests from one
-  generator. A single generator is roughly latency-bound (≈ parallelism ÷ round-trip-time).
-- **`Scale__GeneratorReplicas`** — more generator processes, if one process is CPU-bound.
+- **`Scale__GeneratorReplicas`** (default 3) — more generator processes (horizontal, like the
+  workers). The main producer lever.
+- **`Generator__Parallelism`** (default = cores) — more concurrent in-flight requests per
+  generator process. A generator is roughly latency-bound (≈ parallelism ÷ round-trip-time).
 
 Caveat measured on an 18-core machine: everything (generators, API, RabbitMQ, workers, Postgres)
 shares the same CPU. Once the box is saturated (~4–4.4k orders/sec here), pushing the producer
