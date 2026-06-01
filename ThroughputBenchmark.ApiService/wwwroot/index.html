@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Throughput Benchmark</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #0f1115; color: #e6e6e6; }
+    header { padding: 1.5rem 2rem; border-bottom: 1px solid #222; }
+    h1 { margin: 0; font-size: 1.4rem; }
+    main { padding: 2rem; max-width: 1000px; margin: 0 auto; }
+    button { font-size: 1rem; padding: 0.7rem 1.6rem; border: 0; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    .start { background: #2ea043; color: white; }
+    .drain { background: #9a6700; color: white; }
+    .stop { background: #d1242f; color: white; }
+    .wipe { background: #30363d; color: #e6e6e6; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pill.drain { background: #3a2e13; color: #e3b341; }
+    .controls { display: flex; gap: 1rem; align-items: center; margin-bottom: 2rem; }
+    .pill { padding: 0.3rem 0.8rem; border-radius: 999px; font-size: 0.85rem; background: #222; }
+    .pill.on { background: #133a1c; color: #4ade80; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .card { background: #161a22; border: 1px solid #222; border-radius: 10px; padding: 1rem 1.2rem; }
+    .card .label { font-size: 0.8rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.03em; }
+    .card .value { font-size: 1.8rem; font-weight: 700; margin-top: 0.3rem; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { text-align: right; padding: 0.4rem 0.7rem; border-bottom: 1px solid #1c2129; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: #8b949e; font-weight: 600; font-size: 0.8rem; }
+    .muted { color: #8b949e; }
+  </style>
+</head>
+<body>
+  <header><h1>⚡ Throughput Benchmark</h1></header>
+  <main>
+    <div class="controls">
+      <button id="startBtn" class="start">▶ Start</button>
+      <button id="drainBtn" class="drain" disabled title="Stop generating load; let workers finish the queue">⏸ Stop load</button>
+      <button id="stopBtn" class="stop" disabled title="Stop load and purge the queue so workers go idle">■ Stop &amp; purge</button>
+      <button id="wipeBtn" class="wipe" title="Clear all order &amp; benchmark data (keeps seeded products/users)">🗑 Wipe DB</button>
+      <span id="statusPill" class="pill">idle</span>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="label">Elapsed</div><div class="value" id="elapsed">—</div></div>
+      <div class="card"><div class="label">Enqueued</div><div class="value" id="enqueued">—</div></div>
+      <div class="card"><div class="label">Processed</div><div class="value" id="processed">—</div></div>
+      <div class="card"><div class="label">Queue backlog</div><div class="value" id="backlog">—</div></div>
+      <div class="card"><div class="label">Avg orders/sec</div><div class="value" id="avg">—</div></div>
+      <div class="card"><div class="label">Last interval/sec</div><div class="value" id="last">—</div></div>
+    </div>
+
+    <h3>Samples <span class="muted" id="sampleNote"></span></h3>
+    <table>
+      <thead>
+        <tr><th>Elapsed (s)</th><th>Processed Δ</th><th>Enqueued Δ</th><th>Processed total</th><th>Backlog</th></tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="5" class="muted">No samples yet.</td></tr></tbody>
+    </table>
+  </main>
+
+  <script>
+    const startBtn = document.getElementById('startBtn');
+    const drainBtn = document.getElementById('drainBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const wipeBtn = document.getElementById('wipeBtn');
+    const statusPill = document.getElementById('statusPill');
+    let interval = 5;
+
+    async function post(url, btn) {
+      if (btn) btn.disabled = true;
+      try { await fetch(url, { method: 'POST' }); } catch {}
+      refresh();
+    }
+
+    startBtn.onclick = () => post('/api/benchmark/start', startBtn);
+    drainBtn.onclick = () => post('/api/benchmark/stop-producing', drainBtn);
+    stopBtn.onclick = () => post('/api/benchmark/stop', stopBtn);
+    wipeBtn.onclick = async () => {
+      if (!confirm('Wipe all order & benchmark data? (Seeded products/users are kept.)')) return;
+      const res = await fetch('/api/benchmark/wipe', { method: 'POST' });
+      if (res.status === 409) alert('Stop the current run before wiping.');
+      refresh();
+    };
+
+    function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
+
+    async function refresh() {
+      try {
+        const res = await fetch('/api/benchmark/current');
+        const data = await res.json();
+        if (!data.active) {
+          statusPill.textContent = 'idle';
+          statusPill.className = 'pill';
+          startBtn.disabled = false;
+          drainBtn.disabled = true;
+          stopBtn.disabled = true;
+          wipeBtn.disabled = false;
+          return;
+        }
+        interval = data.intervalSeconds || 5;
+        const draining = !data.producing;
+        statusPill.textContent = draining ? 'draining queue' : 'running';
+        statusPill.className = draining ? 'pill drain' : 'pill on';
+        startBtn.disabled = true;
+        drainBtn.disabled = draining;   // already draining
+        stopBtn.disabled = false;
+        wipeBtn.disabled = true;        // can't wipe mid-run
+
+        const samples = data.samples || [];
+        const last = samples[samples.length - 1];
+        const processedTotal = last ? last.ordersProcessedTotal : 0;
+        const backlog = Math.max(0, data.enqueued - processedTotal);
+        document.getElementById('elapsed').textContent = last ? Math.round(last.elapsedSeconds) + 's' : '—';
+        document.getElementById('enqueued').textContent = fmt(data.enqueued);
+        document.getElementById('processed').textContent = fmt(processedTotal);
+        document.getElementById('backlog').textContent = fmt(backlog);
+        document.getElementById('avg').textContent = data.averagePerSecond.toFixed(1);
+        document.getElementById('last').textContent = last ? (last.ordersProcessedDelta / interval).toFixed(1) : '—';
+        document.getElementById('sampleNote').textContent = `(every ${interval}s)`;
+
+        const rows = document.getElementById('rows');
+        if (samples.length === 0) {
+          rows.innerHTML = '<tr><td colspan="5" class="muted">Waiting for first sample…</td></tr>';
+        } else {
+          rows.innerHTML = samples.slice().reverse().map(s => `
+            <tr>
+              <td>${Math.round(s.elapsedSeconds)}</td>
+              <td>${fmt(s.ordersProcessedDelta)}</td>
+              <td>${fmt(s.ordersEnqueuedDelta)}</td>
+              <td>${fmt(s.ordersProcessedTotal)}</td>
+              <td>${fmt(Math.max(0, s.ordersEnqueuedTotal - s.ordersProcessedTotal))}</td>
+            </tr>`).join('');
+        }
+      } catch (e) { /* transient */ }
+    }
+
+    setInterval(refresh, 2000);
+    refresh();
+  </script>
+</body>
+</html>

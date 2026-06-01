@@ -1,0 +1,27 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+
+# IDE / tooling
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+*.DotSettings.user
+
+# Aspire / local run artifacts
+apphost.log
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (user-secrets live outside the repo, but just in case)
+appsettings.*.local.json

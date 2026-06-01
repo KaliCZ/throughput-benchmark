@@ -1,0 +1,167 @@
+using Microsoft.EntityFrameworkCore;
+using ThroughputBenchmark.ApiService.Benchmarking;
+using ThroughputBenchmark.ApiService.Data;
+using ThroughputBenchmark.ApiService.Messaging;
+using ThroughputBenchmark.Shared.Domain;
+using ThroughputBenchmark.Shared.Messaging;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
+
+// Aspire-wired infrastructure (connection strings come from the AppHost).
+// The API only touches the DB for the sampler + start/stop, so a small pool is plenty;
+// keeping it bounded leaves connection headroom for the worker processes.
+int apiMaxPool = builder.Configuration.GetValue("Db:MaxPoolSize", 20);
+builder.AddNpgsqlDbContext<BenchmarkDbContext>("benchmarkdb", settings =>
+{
+    if (!string.IsNullOrWhiteSpace(settings.ConnectionString))
+        settings.ConnectionString = new Npgsql.NpgsqlConnectionStringBuilder(settings.ConnectionString)
+        {
+            MaxPoolSize = apiMaxPool,
+        }.ConnectionString;
+});
+builder.AddRabbitMQClient("messaging");
+
+builder.Services.AddSingleton<BenchmarkState>();
+builder.Services.AddSingleton<RabbitMqPublisher>();
+builder.Services.AddHostedService<SamplerService>();
+
+var app = builder.Build();
+
+app.MapDefaultEndpoints();
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
+// Create schema + seed setup data, and prepare the publisher channel pool, on startup.
+await DbInitializer.InitializeAsync(app.Services);
+await app.Services.GetRequiredService<RabbitMqPublisher>().InitializeAsync();
+
+// ---- Benchmark control ----
+
+app.MapPost("/api/benchmark/start", async (BenchmarkState state, BenchmarkDbContext db) =>
+{
+    var run = new BenchmarkRun
+    {
+        Id = Guid.NewGuid(),
+        StartedAt = DateTimeOffset.UtcNow,
+        Status = RunStatus.Running,
+        MachineName = Environment.MachineName,
+    };
+    db.BenchmarkRuns.Add(run);
+    await db.SaveChangesAsync();
+
+    state.Start(run.Id, run.StartedAt);
+    return Results.Ok(new { runId = run.Id, startedAt = run.StartedAt });
+});
+
+// Stop accepting/generating new orders, but keep workers draining the existing queue.
+app.MapPost("/api/benchmark/stop-producing", (BenchmarkState state) =>
+{
+    state.StopProducing();
+    return Results.Ok(new { producing = false });
+});
+
+// Stop everything: stop producing, purge the queue so workers go idle, end the run.
+app.MapPost("/api/benchmark/stop", async (BenchmarkState state, BenchmarkDbContext db, RabbitMqPublisher publisher) =>
+{
+    var current = state.Current;
+    state.StopProducing(); // API rejects new orders immediately (no enqueue race)
+
+    uint purged = await publisher.PurgeAsync();
+    state.Stop();
+
+    if (current is not null)
+    {
+        var run = await db.BenchmarkRuns.FindAsync(current.Id);
+        if (run is not null)
+        {
+            run.Status = RunStatus.Stopped;
+            run.StoppedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        }
+    }
+    return Results.Ok(new { stopped = true, purged });
+});
+
+// Reset for the next run: purge the queue and clear all order + benchmark data
+// (the seeded Products/Users setup data is kept). Not allowed mid-run.
+app.MapPost("/api/benchmark/wipe", async (BenchmarkState state, BenchmarkDbContext db, RabbitMqPublisher publisher) =>
+{
+    if (state.Current is not null)
+        return Results.Conflict(new { error = "Stop the current run before wiping." });
+
+    await publisher.PurgeAsync();
+    await db.Database.ExecuteSqlRawAsync(
+        """TRUNCATE TABLE "OrderItems", "Payments", "Orders", "BenchmarkSamples", "BenchmarkRuns" RESTART IDENTITY CASCADE;""");
+    return Results.Ok(new { wiped = true });
+});
+
+// Lightweight status the load generators poll to decide whether to send load.
+app.MapGet("/api/benchmark/status", (BenchmarkState state) =>
+{
+    var run = state.Current;
+    return Results.Ok(new
+    {
+        active = run is not null,
+        producing = run?.Producing ?? false,
+        runId = run?.Id,
+        productCount = DbInitializer.ProductCount,
+        userCount = DbInitializer.UserCount,
+    });
+});
+
+// Current run + recent samples for the dashboard.
+app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbContext db) =>
+{
+    var run = state.Current;
+    if (run is null) return Results.Ok(new { active = false });
+
+    var samples = await db.BenchmarkSamples
+        .Where(s => s.RunId == run.Id)
+        .OrderBy(s => s.SampledAt)
+        .Select(s => new
+        {
+            s.ElapsedSeconds,
+            s.OrdersProcessedTotal,
+            s.OrdersProcessedDelta,
+            s.OrdersEnqueuedTotal,
+            s.OrdersEnqueuedDelta,
+        })
+        .ToListAsync();
+
+    double avgPerSec = samples.Count > 0
+        ? samples[^1].OrdersProcessedTotal / Math.Max(1, samples[^1].ElapsedSeconds)
+        : 0;
+
+    return Results.Ok(new
+    {
+        active = true,
+        producing = run.Producing,
+        runId = run.Id,
+        startedAt = run.StartedAt,
+        enqueued = Interlocked.Read(ref run.Enqueued),
+        averagePerSecond = avgPerSec,
+        intervalSeconds = SamplerService.IntervalSeconds,
+        samples,
+    });
+});
+
+// ---- Hot path: accept an order request and enqueue it ----
+
+app.MapPost("/api/orders", async (OrderRequest req, BenchmarkState state, RabbitMqPublisher publisher) =>
+{
+    var run = state.Current;
+    if (run is null || !run.Producing) return Results.StatusCode(StatusCodes.Status409Conflict); // not accepting load
+
+    var msg = new OrderMessage(run.Id, req.UserId, req.Lines, DateTimeOffset.UtcNow);
+    var body = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(msg);
+    await publisher.PublishAsync(body);
+
+    Interlocked.Increment(ref run.Enqueued);
+    return Results.Accepted();
+});
+
+app.Run();
+
+record OrderRequest(int UserId, List<OrderLine> Lines);

@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="ThroughputBenchmark.ApiService/ThroughputBenchmark.ApiService.csproj" />
+  <Project Path="ThroughputBenchmark.AppHost/ThroughputBenchmark.AppHost.csproj" />
+  <Project Path="ThroughputBenchmark.LoadGenerator/ThroughputBenchmark.LoadGenerator.csproj" />
+  <Project Path="ThroughputBenchmark.ServiceDefaults/ThroughputBenchmark.ServiceDefaults.csproj" />
+  <Project Path="ThroughputBenchmark.Shared/ThroughputBenchmark.Shared.csproj" />
+  <Project Path="ThroughputBenchmark.Worker/ThroughputBenchmark.Worker.csproj" />
+</Solution>
