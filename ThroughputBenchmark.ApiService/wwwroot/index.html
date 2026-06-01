@@ -94,8 +94,8 @@
 
     // Auto mode coarsens the table as the run gets longer, so it stays readable.
     function autoBucket(elapsed) {
-      if (elapsed < 30) return 1;     // 0–30s
-      if (elapsed < 120) return 5;    // 30s–2m
+      if (elapsed < 20) return 1;     // 0–20s
+      if (elapsed < 120) return 5;    // 20s–2m
       if (elapsed < 300) return 10;   // 2m–5m
       if (elapsed < 900) return 30;   // 5m–15m
       return 60;                      // 15m+
