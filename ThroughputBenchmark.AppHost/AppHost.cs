@@ -3,7 +3,7 @@
 // Scale knobs (set as env vars / user-secrets / launch settings on the AppHost):
 //   Scale__ApiReplicas        (default 1)       – ASP.NET servers populating the queue
 //   Scale__WorkerReplicas     (default 3)       – worker PROCESSES draining the queue
-//   Scale__GeneratorReplicas  (default 2)       – generator PROCESSES spamming the API
+//   Scale__GeneratorReplicas  (default 1)       – generator PROCESSES spamming the API
 //   Generator__Parallelism    (default cores)   – concurrent in-flight requests per generator
 //   Worker__Consumers         (default cores)   – consumer threads per worker process
 //   Worker__Prefetch          (default 50)      – RabbitMQ prefetch per consumer
@@ -18,7 +18,9 @@ int GetInt(string key, int def) => int.TryParse(cfg[key], out var v) ? v : def;
 int apiReplicas = GetInt("Scale:ApiReplicas", 1);
 // Generators scale horizontally like the workers: GeneratorReplicas processes, each firing
 // Parallelism concurrent requests (defaults to one per core).
-int generatorReplicas = GetInt("Scale:GeneratorReplicas", 2);
+// One generator already saturates the API publish path (~7-8k/s here) and gives the same
+// processed throughput as more; extra generators just steal CPU from the workers.
+int generatorReplicas = GetInt("Scale:GeneratorReplicas", 1);
 int generatorParallelism = GetInt("Generator:Parallelism", Environment.ProcessorCount);
 int workerPrefetch = GetInt("Worker:Prefetch", 50);
 int workerExtraCpu = GetInt("Worker:ExtraCpuIterations", 0);

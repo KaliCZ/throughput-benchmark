@@ -114,7 +114,7 @@ any reasonable machine.
 
 ## Benchmark results
 
-Default config (3 workers, 2 generators, one consumer/in-flight per core). Numbers are the
+Default config (3 workers, 1 generator, one consumer/in-flight per core). Numbers are the
 run's averages: **processed/sec** = `averagePerSecond` from the page; **enqueued/sec** =
 enqueued total ÷ elapsed. Add a row per machine.
 
@@ -122,7 +122,7 @@ enqueued total ÷ elapsed. Add a row per machine.
 
 | Machine / CPU | Avg processed/sec | Avg enqueued/sec |
 |---|---|---|
-| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 3,881 | 8,077 |
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 3,888 | 7,847 |
 
 ### 1 minute — on battery
 
@@ -158,7 +158,7 @@ bottleneck by design — that's the realistic signal. Tune via environment varia
 |---|---|---|
 | `Scale__ApiReplicas` | 1 | ASP.NET servers populating the queue *(keep at 1 — see note)* |
 | `Scale__WorkerReplicas` | 3 | **Worker processes** draining the queue (competing consumers, each its own connection + GC). The primary scaling lever. |
-| `Scale__GeneratorReplicas` | 2 | Generator **processes** spamming the API (horizontal, like the workers) |
+| `Scale__GeneratorReplicas` | 1 | Generator **processes** spamming the API. One already saturates the publish path (~7–8k/s); more just steal CPU from the workers. |
 | `Generator__Parallelism` | CPU count | Concurrent in-flight requests per generator process |
 | `Worker__Consumers` | CPU count | Consumer threads **per worker process** — one per core, so each process already saturates the machine. Total worker concurrency = `WorkerReplicas × Consumers`. |
 | `Db__MaxPoolSize` | cores + 5 | Npgsql connection-pool cap per worker process (API uses 20). Keeps `replicas × pool` under Postgres `max_connections`. |
@@ -213,10 +213,11 @@ of the workers — i.e. the **Queue backlog should keep growing** during a run. 
 goes flat, the generator has become the bottleneck and you're measuring producer rate, not
 worker rate. Scale the producer:
 
-- **`Scale__GeneratorReplicas`** (default 2) — more generator processes (horizontal, like the
-  workers). The main producer lever.
-- **`Generator__Parallelism`** (default = cores) — more concurrent in-flight requests per
-  generator process. A generator is roughly latency-bound (≈ parallelism ÷ round-trip-time).
+- **`Scale__GeneratorReplicas`** (default 1) — more generator processes. Note: on this setup the
+  API publish path saturates at ~7–8k/s with very little concurrency, so neither more replicas
+  nor higher `Generator__Parallelism` meaningfully raises (or lowers) the enqueue rate — they
+  mostly trade CPU between producers and workers. One generator is plenty to keep workers fed.
+- **`Generator__Parallelism`** (default = cores) — concurrent in-flight requests per generator.
 
 Caveat measured on an 18-core machine: everything (generators, API, RabbitMQ, workers, Postgres)
 shares the same CPU. Once the box is saturated (~4–4.4k orders/sec here), pushing the producer
