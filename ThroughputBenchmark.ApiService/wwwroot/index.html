@@ -37,6 +37,7 @@
     <div class="controls">
       <button id="start1Btn" class="start" title="Run a fixed 1-minute benchmark, then auto-stop">▶ Run 1 min</button>
       <button id="start30Btn" class="start" title="Run a fixed 30-minute benchmark, then auto-stop">▶ Run 30 min</button>
+      <button id="startOpenBtn" class="start" title="Run with no time limit; stop manually">▶ Run (no limit)</button>
       <button id="drainBtn" class="drain" disabled title="Stop generating load; let workers finish the queue">⏸ Stop load</button>
       <button id="stopBtn" class="stop" disabled title="Stop load and purge the queue so workers go idle">■ Stop &amp; purge</button>
       <button id="wipeBtn" class="wipe" title="Clear all order &amp; benchmark data (keeps seeded products/users)">🗑 Wipe DB</button>
@@ -86,6 +87,7 @@
   <script>
     const start1Btn = document.getElementById('start1Btn');
     const start30Btn = document.getElementById('start30Btn');
+    const startOpenBtn = document.getElementById('startOpenBtn');
     const drainBtn = document.getElementById('drainBtn');
     const stopBtn = document.getElementById('stopBtn');
     const wipeBtn = document.getElementById('wipeBtn');
@@ -113,6 +115,7 @@
 
     start1Btn.onclick = () => post('/api/benchmark/start?durationSeconds=60', start1Btn);
     start30Btn.onclick = () => post('/api/benchmark/start?durationSeconds=1800', start30Btn);
+    startOpenBtn.onclick = () => post('/api/benchmark/start', startOpenBtn);
     drainBtn.onclick = () => post('/api/benchmark/stop-producing', drainBtn);
     stopBtn.onclick = () => post('/api/benchmark/stop', stopBtn);
     wipeBtn.onclick = async () => {
@@ -135,6 +138,7 @@
           statusPill.className = 'pill';
           start1Btn.disabled = false;
           start30Btn.disabled = false;
+          startOpenBtn.disabled = false;
           drainBtn.disabled = true;
           stopBtn.disabled = true;
           wipeBtn.disabled = false;
@@ -154,6 +158,7 @@
         statusPill.className = draining ? 'pill drain' : 'pill on';
         start1Btn.disabled = true;
         start30Btn.disabled = true;
+        startOpenBtn.disabled = true;
         drainBtn.disabled = draining;   // already draining
         stopBtn.disabled = false;
         wipeBtn.disabled = true;        // can't wipe mid-run
