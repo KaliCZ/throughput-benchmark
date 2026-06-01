@@ -53,7 +53,19 @@
       <div class="card"><div class="label">Last 10s avg/sec</div><div class="value" id="last10">—</div></div>
     </div>
 
-    <h3>Samples <span class="muted" id="sampleNote"></span></h3>
+    <h3 style="display:flex; align-items:center; gap:0.8rem;">
+      Samples <span class="muted" id="sampleNote"></span>
+      <span style="margin-left:auto; font-size:0.85rem; font-weight:400;">
+        Show every
+        <select id="granularity" style="background:#161a22; color:#e6e6e6; border:1px solid #30363d; border-radius:6px; padding:0.2rem 0.4rem;">
+          <option value="1">1s</option>
+          <option value="5">5s</option>
+          <option value="10" selected>10s</option>
+          <option value="30">30s</option>
+          <option value="60">60s</option>
+        </select>
+      </span>
+    </h3>
     <table>
       <thead>
         <tr><th>Elapsed (s)</th><th>Processed Δ</th><th>Enqueued Δ</th><th>Processed total</th><th>Backlog</th></tr>
@@ -68,7 +80,10 @@
     const stopBtn = document.getElementById('stopBtn');
     const wipeBtn = document.getElementById('wipeBtn');
     const statusPill = document.getElementById('statusPill');
-    let interval = 5;
+    const granularity = document.getElementById('granularity');
+    let interval = 1;
+
+    granularity.onchange = () => refresh();
 
     async function post(url, btn) {
       if (btn) btn.disabled = true;
@@ -90,7 +105,7 @@
 
     async function refresh() {
       try {
-        const res = await fetch('/api/benchmark/current');
+        const res = await fetch('/api/benchmark/current?bucket=' + granularity.value);
         const data = await res.json();
         if (!data.active) {
           statusPill.textContent = 'idle';
@@ -101,7 +116,7 @@
           wipeBtn.disabled = false;
           return;
         }
-        interval = data.intervalSeconds || 5;
+        interval = data.intervalSeconds || 1;
         const draining = !data.producing;
         statusPill.textContent = draining ? 'draining queue' : 'running';
         statusPill.className = draining ? 'pill drain' : 'pill on';
@@ -119,11 +134,10 @@
         document.getElementById('processed').textContent = fmt(processedTotal);
         document.getElementById('backlog').textContent = fmt(backlog);
         document.getElementById('avg').textContent = fmt(Math.round(data.averagePerSecond));
-        const win = samples.slice(-10);
-        const winSecs = win.length * interval;
-        const winProcessed = win.reduce((a, s) => a + s.ordersProcessedDelta, 0);
-        document.getElementById('last10').textContent = winSecs ? fmt(Math.round(winProcessed / winSecs)) : '—';
-        document.getElementById('sampleNote').textContent = `(every ${interval}s)`;
+        document.getElementById('last10').textContent = fmt(Math.round(data.recentPerSecond || 0));
+        const bucket = data.bucketSeconds || 1;
+        document.getElementById('sampleNote').textContent =
+          bucket === 1 ? `(every ${interval}s)` : `(${interval}s sampling · ${bucket}s rows)`;
 
         const rows = document.getElementById('rows');
         if (samples.length === 0) {

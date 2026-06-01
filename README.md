@@ -57,6 +57,8 @@ dotnet run --project ThroughputBenchmark.AppHost
 2. Open the **`apiservice`** endpoint from the dashboard — that's the benchmark control page.
 3. Press **▶ Start**. The load generators detect the active run and start hammering the API.
 4. Watch the live cards/table: enqueued, processed, queue backlog, avg orders/sec, per-second deltas.
+   The samples table has a **"Show every"** dropdown (1s / 5s / 10s / 30s / 60s) that buckets the
+   rows for display — the DB always keeps 1s resolution, and the metric cards stay 1s-accurate.
 
 ### Control buttons
 
@@ -103,7 +105,7 @@ any reasonable machine.
 
 ## Benchmark results
 
-Default config (3 workers, 3 generators, one consumer/in-flight per core). Numbers are the
+Default config (3 workers, 2 generators, one consumer/in-flight per core). Numbers are the
 run's averages: **processed/sec** = `averagePerSecond` from the page; **enqueued/sec** =
 enqueued total ÷ elapsed. Add a row per machine.
 
@@ -111,7 +113,7 @@ enqueued total ÷ elapsed. Add a row per machine.
 
 | Machine / CPU | Avg processed/sec | Avg enqueued/sec |
 |---|---|---|
-| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 3,189 | 7,012 |
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 3,881 | 8,077 |
 
 ### 1 minute — on battery
 
@@ -147,7 +149,7 @@ bottleneck by design — that's the realistic signal. Tune via environment varia
 |---|---|---|
 | `Scale__ApiReplicas` | 1 | ASP.NET servers populating the queue *(keep at 1 — see note)* |
 | `Scale__WorkerReplicas` | 3 | **Worker processes** draining the queue (competing consumers, each its own connection + GC). The primary scaling lever. |
-| `Scale__GeneratorReplicas` | 3 | Generator **processes** spamming the API (horizontal, like the workers) |
+| `Scale__GeneratorReplicas` | 2 | Generator **processes** spamming the API (horizontal, like the workers) |
 | `Generator__Parallelism` | CPU count | Concurrent in-flight requests per generator process |
 | `Worker__Consumers` | CPU count | Consumer threads **per worker process** — one per core, so each process already saturates the machine. Total worker concurrency = `WorkerReplicas × Consumers`. |
 | `Db__MaxPoolSize` | cores + 5 | Npgsql connection-pool cap per worker process (API uses 20). Keeps `replicas × pool` under Postgres `max_connections`. |
@@ -202,7 +204,7 @@ of the workers — i.e. the **Queue backlog should keep growing** during a run. 
 goes flat, the generator has become the bottleneck and you're measuring producer rate, not
 worker rate. Scale the producer:
 
-- **`Scale__GeneratorReplicas`** (default 3) — more generator processes (horizontal, like the
+- **`Scale__GeneratorReplicas`** (default 2) — more generator processes (horizontal, like the
   workers). The main producer lever.
 - **`Generator__Parallelism`** (default = cores) — more concurrent in-flight requests per
   generator process. A generator is roughly latency-bound (≈ parallelism ÷ round-trip-time).

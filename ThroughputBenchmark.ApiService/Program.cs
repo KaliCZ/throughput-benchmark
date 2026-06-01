@@ -111,17 +111,18 @@ app.MapGet("/api/benchmark/status", (BenchmarkState state) =>
     });
 });
 
-// Current run + recent samples for the dashboard.
-app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbContext db) =>
+// Current run + samples for the dashboard. `bucket` (seconds) downsamples the table for the
+// display only — the DB always keeps 1s resolution; the metric cards stay 1s-accurate.
+app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbContext db, int bucket = 1) =>
 {
     var run = state.Current;
     if (run is null) return Results.Ok(new { active = false });
 
-    // Most recent 600 samples (10 minutes at 1s) for the live view, ascending for display.
-    var samples = await db.BenchmarkSamples
+    // Last 2h of 1s samples (bounds memory on very long runs), ascending.
+    var raw = await db.BenchmarkSamples
         .Where(s => s.RunId == run.Id)
         .OrderByDescending(s => s.SampledAt)
-        .Take(600)
+        .Take(7200)
         .Select(s => new
         {
             s.ElapsedSeconds,
@@ -131,11 +132,31 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
             s.OrdersEnqueuedDelta,
         })
         .ToListAsync();
-    samples.Reverse();
+    raw.Reverse();
 
-    double avgPerSec = samples.Count > 0
-        ? samples[^1].OrdersProcessedTotal / Math.Max(1, samples[^1].ElapsedSeconds)
+    // Cumulative average (per second) and a rolling last-10s rate — both from raw 1s data,
+    // so they don't change with the chosen table granularity.
+    double avgPerSec = raw.Count > 0
+        ? raw[^1].OrdersProcessedTotal / Math.Max(1, raw[^1].ElapsedSeconds)
         : 0;
+    var recent = raw.TakeLast(10).ToList();
+    double recentPerSec = recent.Count > 0
+        ? recent.Sum(x => x.OrdersProcessedDelta) / (double)(recent.Count * SamplerService.IntervalSeconds)
+        : 0;
+
+    // Bucket the table rows: sum deltas over each window, totals = end of window.
+    int g = Math.Max(1, bucket);
+    var samples = raw
+        .GroupBy(s => (int)Math.Ceiling(s.ElapsedSeconds / g))
+        .Select(grp => new
+        {
+            ElapsedSeconds = grp.Max(x => x.ElapsedSeconds),
+            OrdersProcessedTotal = grp.Last().OrdersProcessedTotal,
+            OrdersProcessedDelta = grp.Sum(x => x.OrdersProcessedDelta),
+            OrdersEnqueuedTotal = grp.Last().OrdersEnqueuedTotal,
+            OrdersEnqueuedDelta = grp.Sum(x => x.OrdersEnqueuedDelta),
+        })
+        .ToList();
 
     return Results.Ok(new
     {
@@ -145,7 +166,9 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
         startedAt = run.StartedAt,
         enqueued = Interlocked.Read(ref run.Enqueued),
         averagePerSecond = avgPerSec,
+        recentPerSecond = recentPerSec,
         intervalSeconds = SamplerService.IntervalSeconds,
+        bucketSeconds = g,
         samples,
     });
 });
