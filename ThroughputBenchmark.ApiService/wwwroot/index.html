@@ -120,6 +120,13 @@
 
     function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
 
+    // Plain seconds up to 2 minutes, then minutes + seconds (e.g. "2m 35s").
+    function fmtElapsed(secs) {
+      secs = Math.round(secs);
+      if (secs < 120) return secs + 's';
+      return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+    }
+
     async function refresh() {
       try {
         const auto = granularity.value === 'auto';
@@ -158,7 +165,7 @@
         lastElapsed = last ? last.elapsedSeconds : 0;
         const processedTotal = last ? last.ordersProcessedTotal : 0;
         const backlog = Math.max(0, data.enqueued - processedTotal);
-        document.getElementById('elapsed').textContent = last ? Math.round(last.elapsedSeconds) + 's' : '—';
+        document.getElementById('elapsed').textContent = last ? fmtElapsed(last.elapsedSeconds) : '—';
         document.getElementById('enqueued').textContent = fmt(data.enqueued);
         document.getElementById('processed').textContent = fmt(processedTotal);
         document.getElementById('backlog').textContent = fmt(backlog);
