@@ -38,20 +38,18 @@ enqueued total ÷ elapsed. Add a row per machine.
 
 ### 1 minute — on battery
 
-| Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used (Wh) | Battery Used % |
-|---|---|---|---|---|
-| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used % |
+|---|---|---|---|
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | _TBD_ | _TBD_ | _TBD_ |
 
 ### 30 minutes — on battery, lowest screen brightness
 
-| Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used (Wh) | Battery Used % |
-|---|---|---|---|---|
-| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used % |
+|---|---|---|---|
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | _TBD_ | _TBD_ | _TBD_ |
 
 > Read the values straight off the dashboard when the run auto-stops:
 > - **Avg processed/sec** / **Avg enqueued/sec** — the throughput cards.
-> - **Battery Used (Wh)** — the **Energy used (Wh)** card: total energy drawn over the run. The real
->   efficiency number — lower Wh for the same processed/sec means the machine did the work more efficiently.
 > - **Battery Used %** — the **Battery used** card: charge % at start − charge % at end.
 
 ## Results in Postgres

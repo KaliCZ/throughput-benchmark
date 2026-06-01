@@ -138,7 +138,6 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
             s.OrdersEnqueuedTotal,
             s.OrdersEnqueuedDelta,
             s.CpuPercent,
-            s.PowerWatts,
             s.BatteryPercent,
         })
         .ToListAsync();
@@ -161,12 +160,7 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
         ? recent.Sum(x => x.OrdersProcessedDelta) / (double)(recent.Count * SamplerService.IntervalSeconds)
         : 0;
 
-    // Run-level energy + battery aggregates (from the raw 1s samples). Power is sampled once a
-    // second, so the energy integral is just sum(watts) * 1s, in watt-hours.
-    var powerSamples = raw.Where(x => x.PowerWatts.HasValue).Select(x => x.PowerWatts!.Value).ToList();
-    double? energyWh = powerSamples.Count > 0
-        ? Math.Round(powerSamples.Sum() * SamplerService.IntervalSeconds / 3600.0, 2)
-        : null;
+    // Run-level battery aggregate (from the raw 1s samples): charge % consumed start - end.
     var batterySamples = raw.Where(x => x.BatteryPercent.HasValue).Select(x => x.BatteryPercent!.Value).ToList();
     int? batteryUsedPercent = batterySamples.Count >= 2
         ? Math.Max(0, batterySamples[0] - batterySamples[^1])
@@ -190,7 +184,6 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
                 OrdersProcessedTotal = grp.Last().OrdersProcessedTotal,
                 OrdersEnqueuedTotal = grp.Last().OrdersEnqueuedTotal,
                 CpuPercent = AvgOrNull(grp.Select(x => x.CpuPercent)),
-                PowerWatts = AvgOrNull(grp.Select(x => x.PowerWatts)),
                 BatteryPercent = grp.Last().BatteryPercent,
             };
         })
@@ -206,7 +199,6 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
         enqueued = Interlocked.Read(ref run.Enqueued),
         averagePerSecond = avgPerSec,
         recentPerSecond = recentPerSec,
-        energyWh,
         batteryUsedPercent,
         intervalSeconds = SamplerService.IntervalSeconds,
         bucketSeconds = g,

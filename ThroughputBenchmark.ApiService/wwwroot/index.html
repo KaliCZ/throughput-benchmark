@@ -55,10 +55,6 @@
       <div class="card"><div class="label">Last 10s avg/sec</div><div class="value" id="last10">—</div></div>
       <div class="card"><div class="label">CPU %</div><div class="value" id="cpu">—</div></div>
       <div class="card"><div class="label">Battery %</div><div class="value" id="battery">—</div></div>
-    </div>
-    <div class="cards">
-      <div class="card"><div class="label">Power now (W)</div><div class="value" id="powerNow">—</div></div>
-      <div class="card"><div class="label">Energy used (Wh)</div><div class="value" id="energy">—</div></div>
       <div class="card"><div class="label">Battery used</div><div class="value" id="batteryUsed">—</div></div>
     </div>
 
@@ -78,9 +74,9 @@
     </h3>
     <table>
       <thead>
-        <tr><th>Elapsed (s)</th><th>Processed/sec</th><th>Enqueued/sec</th><th>Processed total</th><th>Backlog</th><th>CPU %</th><th>Power W</th></tr>
+        <tr><th>Elapsed (s)</th><th>Processed/sec</th><th>Enqueued/sec</th><th>Processed total</th><th>Backlog</th><th>CPU %</th></tr>
       </thead>
-      <tbody id="rows"><tr><td colspan="7" class="muted">No samples yet.</td></tr></tbody>
+      <tbody id="rows"><tr><td colspan="6" class="muted">No samples yet.</td></tr></tbody>
     </table>
   </main>
 
@@ -176,8 +172,6 @@
         document.getElementById('last10').textContent = fmt(Math.round(data.recentPerSecond || 0));
         document.getElementById('cpu').textContent = last && last.cpuPercent != null ? last.cpuPercent.toFixed(0) + '%' : '—';
         document.getElementById('battery').textContent = last && last.batteryPercent != null ? last.batteryPercent + '%' : '—';
-        document.getElementById('powerNow').textContent = last && last.powerWatts != null ? last.powerWatts.toFixed(1) : '—';
-        document.getElementById('energy').textContent = data.energyWh != null ? data.energyWh.toFixed(2) : '—';
         document.getElementById('batteryUsed').textContent = data.batteryUsedPercent != null ? data.batteryUsedPercent + '%' : '—';
         const bucket = data.bucketSeconds || 1;
         const mode = auto ? 'auto ' : '';
@@ -186,7 +180,7 @@
 
         const rows = document.getElementById('rows');
         if (samples.length === 0) {
-          rows.innerHTML = '<tr><td colspan="7" class="muted">Waiting for first sample…</td></tr>';
+          rows.innerHTML = '<tr><td colspan="6" class="muted">Waiting for first sample…</td></tr>';
         } else {
           rows.innerHTML = samples.slice().reverse().map(s => `
             <tr>
@@ -196,7 +190,6 @@
               <td>${fmt(s.ordersProcessedTotal)}</td>
               <td>${fmt(Math.max(0, s.ordersEnqueuedTotal - s.ordersProcessedTotal))}</td>
               <td>${s.cpuPercent == null ? '—' : s.cpuPercent.toFixed(0) + '%'}</td>
-              <td>${s.powerWatts == null ? '—' : s.powerWatts.toFixed(1)}</td>
             </tr>`).join('');
         }
       } catch (e) { /* transient */ }
