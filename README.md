@@ -54,6 +54,7 @@ is double what the core figure suggests. Numbers are the run's averages: **proce
 | Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used % |
 |---|---|---|---|
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,171 | 6,528 | 27% |
+| **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | 1,100 | 2,856 | 12% |
 
 ### 20 minutes — on battery, highest screen brightness
 
