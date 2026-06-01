@@ -50,9 +50,12 @@
       <div class="card"><div class="label">Queue backlog</div><div class="value" id="backlog">—</div></div>
     </div>
     <div class="cards">
-      <div class="card"><div class="label">Avg orders/sec</div><div class="value" id="avg">—</div></div>
-      <div class="card"><div class="label">Last 10s avg/sec</div><div class="value" id="last10">—</div></div>
-      <div class="card"><div class="label">CPU %</div><div class="value" id="cpu">—</div></div>
+      <div class="card"><div class="label">Avg processed/sec</div><div class="value" id="avg">—</div></div>
+      <div class="card"><div class="label">Last 10s processed/sec</div><div class="value" id="last10">—</div></div>
+      <div class="card"><div class="label">Avg enqueued/sec</div><div class="value" id="avgEnq">—</div></div>
+      <div class="card"><div class="label">Last 10s enqueued/sec</div><div class="value" id="last10Enq">—</div></div>
+    </div>
+    <div class="cards">
       <div class="card"><div class="label">Battery %</div><div class="value" id="battery">—</div></div>
       <div class="card"><div class="label">Battery used</div><div class="value" id="batteryUsed">—</div></div>
     </div>
@@ -171,7 +174,8 @@
         document.getElementById('backlog').textContent = fmt(backlog);
         document.getElementById('avg').textContent = fmt(Math.round(data.averagePerSecond));
         document.getElementById('last10').textContent = fmt(Math.round(data.recentPerSecond || 0));
-        document.getElementById('cpu').textContent = last && last.cpuPercent != null ? last.cpuPercent.toFixed(0) + '%' : '—';
+        document.getElementById('avgEnq').textContent = fmt(Math.round(data.averageEnqueuedPerSecond || 0));
+        document.getElementById('last10Enq').textContent = fmt(Math.round(data.recentEnqueuedPerSecond || 0));
         document.getElementById('battery').textContent = last && last.batteryPercent != null ? last.batteryPercent + '%' : '—';
         const bu = document.getElementById('batteryUsed');
         if (data.batteryChargedDuringRun) {

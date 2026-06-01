@@ -146,13 +146,13 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
 
     // Cumulative average (per second) and a rolling last-10s rate — both from raw 1s data,
     // so they don't change with the chosen table granularity.
-    double avgPerSec = raw.Count > 0
-        ? raw[^1].OrdersProcessedTotal / Math.Max(1, raw[^1].ElapsedSeconds)
-        : 0;
+    double elapsedForAvg = raw.Count > 0 ? Math.Max(1, raw[^1].ElapsedSeconds) : 1;
+    double avgPerSec = raw.Count > 0 ? raw[^1].OrdersProcessedTotal / elapsedForAvg : 0;
+    double avgEnqPerSec = raw.Count > 0 ? raw[^1].OrdersEnqueuedTotal / elapsedForAvg : 0;
     var recent = raw.TakeLast(10).ToList();
-    double recentPerSec = recent.Count > 0
-        ? recent.Sum(x => x.OrdersProcessedDelta) / (double)(recent.Count * SamplerService.IntervalSeconds)
-        : 0;
+    double recentWindow = Math.Max(1, recent.Count * SamplerService.IntervalSeconds);
+    double recentPerSec = recent.Count > 0 ? recent.Sum(x => x.OrdersProcessedDelta) / recentWindow : 0;
+    double recentEnqPerSec = recent.Count > 0 ? recent.Sum(x => x.OrdersEnqueuedDelta) / recentWindow : 0;
 
     // Run-level battery aggregate (from the raw 1s samples): charge % consumed start - end.
     // Only valid for a pure on-battery run: if AC was connected at any sample (started/ended on
@@ -196,6 +196,8 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
         enqueued = Interlocked.Read(ref run.Enqueued),
         averagePerSecond = avgPerSec,
         recentPerSecond = recentPerSec,
+        averageEnqueuedPerSecond = avgEnqPerSec,
+        recentEnqueuedPerSecond = recentEnqPerSec,
         batteryUsedPercent,
         batteryChargedDuringRun = chargedDuringRun,
         intervalSeconds = SamplerService.IntervalSeconds,
