@@ -41,6 +41,7 @@ enqueued total ÷ elapsed. Add a row per machine.
 | Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used % |
 |---|---|---|---|
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,366 | 7,812 | 1% |
+| **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | 1,451 | 4,123 | _N/A_ |
 
 ### 20 minutes — on battery, lowest screen brightness
 
