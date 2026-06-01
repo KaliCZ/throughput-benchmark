@@ -55,6 +55,7 @@ is double what the core figure suggests. Numbers are the run's averages: **proce
 |---|---|---|---|
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,171 | 6,528 | 27% |
 | **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | 1,100 | 2,856 | 12% |
+| **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores / 32 threads | 3,337 | 3,378 | 27% |
 
 ### 20 minutes — on battery, highest screen brightness
 
