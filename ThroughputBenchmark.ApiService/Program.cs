@@ -43,8 +43,15 @@ await app.Services.GetRequiredService<RabbitMqPublisher>().InitializeAsync();
 // durationSeconds > 0 runs a fixed-length benchmark that the sampler auto-stops at the deadline
 // (the "Run 1 min" / "Run 20 min" buttons). durationSeconds = 0 is an open-ended run you stop
 // manually with the Stop buttons.
-app.MapPost("/api/benchmark/start", async (BenchmarkState state, BenchmarkDbContext db, int durationSeconds = 0) =>
+app.MapPost("/api/benchmark/start", async (BenchmarkState state, BenchmarkDbContext db, RabbitMqPublisher publisher, int durationSeconds = 0) =>
 {
+    // Every run starts from a clean operational state: purge the queue and drop all transactional
+    // order data so a prior run's millions of rows can't bloat the indexes and skew this run's
+    // insert throughput. Seeded Products/Users and the run history (Runs/Samples) are kept.
+    await publisher.PurgeAsync();
+    await db.Database.ExecuteSqlRawAsync(
+        """TRUNCATE TABLE "OrderItems", "Payments", "Orders" RESTART IDENTITY CASCADE;""");
+
     var startedAt = DateTimeOffset.UtcNow;
     DateTimeOffset? endsAt = durationSeconds > 0 ? startedAt.AddSeconds(durationSeconds) : null;
 
