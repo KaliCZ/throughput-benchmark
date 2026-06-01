@@ -34,7 +34,7 @@ enqueued total ÷ elapsed. Add a row per machine.
 
 | Machine / CPU | Avg processed/sec | Avg enqueued/sec |
 |---|---|---|
-| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 3,888 | 7,847 |
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,050 | 7,673 |
 
 ### 1 minute — on battery
 
