@@ -120,10 +120,10 @@
 
     function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
 
-    // Plain seconds up to 2 minutes, then minutes + seconds (e.g. "2m 35s").
+    // Plain seconds under a minute, then minutes + seconds (e.g. "2m 35s").
     function fmtElapsed(secs) {
       secs = Math.round(secs);
-      if (secs < 120) return secs + 's';
+      if (secs < 60) return secs + 's';
       return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
     }
 
