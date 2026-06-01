@@ -49,21 +49,28 @@ is double what the core figure suggests. Numbers are the run's averages: **proce
 | **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | 1,619 | 4,152 | 1% |
 | **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores / 32 threads | 3,758 | 4,191 | 2% |
 
-### 20 minutes — on battery, lowest screen brightness
+### 20 minutes — on battery
 
-| Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used % |
-|---|---|---|---|
-| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,171 | 6,528 | 27% |
-| **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | 1,100 | 2,856 | 12% |
-| **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores / 32 threads | 3,337 | 3,378 | 27% |
+The **energy** columns are derived, not read off the dashboard: **Wh used** = Battery Used % ×
+full-charge capacity; **Wh / 1M orders** = Wh used ÷ (avg processed/sec × 1,200 s) — lower is
+better (more work per watt-hour). They're approximate: Windows reports charge as an integer %,
+so this is only meaningful on these 20-minute runs where the drain is large (it's why the
+1-minute battery tables above, at 1–2% drain, omit it). Full-charge capacities: ROG Strix
+**87.5 Wh** measured (90 Wh design); Zenbook A16 **70 Wh** and Zenbook 14 **75 Wh** (nominal spec).
 
-### 20 minutes — on battery, highest screen brightness
+| Machine / CPU | Brightness | Avg processed/sec | Avg enqueued/sec | Battery | Used % | Wh used | Wh / 1M orders |
+|---|---|---|---|---|---|---|---|
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | low | 4,171 | 6,528 | 70 Wh | 27% | 18.9 | **3.8** |
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | high | 4,306 | 6,977 | 70 Wh | 28% | 19.6 | **3.8** |
+| **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | low | 1,100 | 2,856 | 75 Wh | 12% | 9.0 | **6.8** |
+| **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores / 32 threads | low | 3,337 | 3,378 | 87.5 Wh | 27% | 23.6 | **5.9** |
 
-| Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used % |
-|---|---|---|---|
-| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,306 | 6,977 | 28% |
+> **Efficiency:** the Snapdragon's ~3.8 Wh/1M beats the Ryzen's 5.9 (~1.55×) and the Core
+> Ultra's 6.8. That edge over the Ryzen splits roughly evenly between two things: the Snapdragon
+> processes ~25% more orders per % of charge (chip/platform), **and** its 70 Wh battery is ~20%
+> smaller than the Ryzen's 87.5 Wh, so an identical 27% drain is less actual energy.
 
-> Read the values straight off the dashboard when the run auto-stops:
+> Read the throughput values straight off the dashboard when the run auto-stops:
 > - **Avg processed/sec** / **Avg enqueued/sec** — the throughput cards.
 > - **Battery Used %** — the **Battery used** card: charge % at start − charge % at end.
 
