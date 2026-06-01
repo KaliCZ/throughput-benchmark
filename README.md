@@ -20,7 +20,7 @@ dotnet run --project ThroughputBenchmark.AppHost
 
 1. Open the **Aspire dashboard** URL printed in the console.
 2. Open the **`apiservice`** endpoint from the dashboard — that's the benchmark control page.
-3. Press **▶ Run 1 min** or **▶ Run 30 min**, then watch the live cards/table for the results.
+3. Press **▶ Run 1 min** or **▶ Run 20 min**, then watch the live cards/table for the results.
 
 > Stop the stack with **Ctrl+C** in the AppHost console so Aspire cleans up the containers.
 
@@ -42,7 +42,7 @@ enqueued total ÷ elapsed. Add a row per machine.
 |---|---|---|---|
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,466 | 7,238 | 1% |
 
-### 30 minutes — on battery, lowest screen brightness
+### 20 minutes — on battery, lowest screen brightness
 
 | Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used % |
 |---|---|---|---|

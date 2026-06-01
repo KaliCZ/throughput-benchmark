@@ -12,7 +12,7 @@ namespace ThroughputBenchmark.ApiService.Benchmarking;
 /// The processed count is computed INCREMENTALLY: each tick counts only the orders processed
 /// since the previous tick (an indexed range scan on ProcessedAt), so the cost stays
 /// proportional to orders-per-second and does not grow with the table size — important when a
-/// 30-minute run accumulates millions of rows.
+/// 20-minute run accumulates millions of rows.
 ///
 /// NOTE: this assumes a single API replica. With multiple API replicas you'd get one sampler
 /// per replica (duplicate samples) and the enqueued counter would be split, so keep
@@ -90,7 +90,7 @@ public sealed class SamplerService(
 
                 lastEnqueued = enqueued;
 
-                // Fixed-duration run (the "Run 1 min" / "Run 30 min" buttons): once the deadline
+                // Fixed-duration run (the "Run 1 min" / "Run 20 min" buttons): once the deadline
                 // passes, end the run exactly like "Stop & purge" — stop producing, drop the
                 // backlog, close the run. The sample above captured the final window first.
                 if (run.EndsAt is { } deadline && boundary >= deadline)

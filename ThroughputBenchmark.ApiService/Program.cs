@@ -41,7 +41,7 @@ await app.Services.GetRequiredService<RabbitMqPublisher>().InitializeAsync();
 // ---- Benchmark control ----
 
 // durationSeconds > 0 runs a fixed-length benchmark that the sampler auto-stops at the deadline
-// (the "Run 1 min" / "Run 30 min" buttons). durationSeconds = 0 is an open-ended run you stop
+// (the "Run 1 min" / "Run 20 min" buttons). durationSeconds = 0 is an open-ended run you stop
 // manually with the Stop buttons.
 app.MapPost("/api/benchmark/start", async (BenchmarkState state, BenchmarkDbContext db, int durationSeconds = 0) =>
 {
