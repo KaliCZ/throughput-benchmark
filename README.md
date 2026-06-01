@@ -75,6 +75,32 @@ seeing the consumer fall behind the producer.
 > Stop the stack with **Ctrl+C** in the AppHost console so Aspire tears the containers down
 > cleanly. (A hard kill can leave the Postgres/RabbitMQ containers running.)
 
+## Running on another machine
+
+The whole point is to compare hardware, and the app **auto-sizes to the machine** — `Worker:Consumers`
+defaults to that machine's CPU core count, worker replicas to 3, and the Npgsql pool to `cores + 5`.
+Nothing is hard-coded to this box, so a clone runs fairly on any machine.
+
+```bash
+git clone https://github.com/KaliCZ/throughput-benchmark
+cd throughput-benchmark
+dotnet dev-certs https --trust          # one-time: trust the local HTTPS dev cert
+dotnet run --project ThroughputBenchmark.AppHost
+```
+
+Then open the `apiservice` endpoint from the dashboard and press **Start**.
+
+What that machine needs:
+- **.NET 10 SDK** and a **container runtime** (Docker Desktop / Podman). The Aspire templates are
+  *not* required just to run — only the SDK + containers.
+- Enough RAM for the Postgres settings (`shared_buffers=2GB`); fine on any modern dev box.
+
+For a comparable score, run the same way on each machine (same buttons, similar run length) and
+compare the **avg orders/sec** plus the per-5s curve. If a machine's backlog stays flat, bump
+`Generator__Parallelism` there so the workers stay fed (see *Producer vs consumer balance*). The
+only fixed knobs are the Postgres server settings, which are sized to cover up to ~10 workers on
+any reasonable machine.
+
 ## Results in Postgres
 
 - `BenchmarkRuns` — one row per run (started/stopped timestamps, machine name).
@@ -93,8 +119,8 @@ bottleneck by design — that's the realistic signal. Tune via environment varia
 |---|---|---|
 | `Scale__ApiReplicas` | 1 | ASP.NET servers populating the queue *(keep at 1 — see note)* |
 | `Scale__WorkerReplicas` | 3 | **Worker processes** draining the queue (competing consumers, each its own connection + GC). The primary scaling lever. |
-| `Scale__GeneratorReplicas` | 1 | Console apps generating load |
-| `Generator__Parallelism` | 32 | Concurrent in-flight requests per generator |
+| `Scale__GeneratorReplicas` | 1 | Console apps generating load (scale up if one generator can't keep the backlog growing) |
+| `Generator__Parallelism` | 64 | Concurrent in-flight requests per generator |
 | `Worker__Consumers` | CPU count | Consumer threads **per worker process** — one per core, so each process already saturates the machine. Total worker concurrency = `WorkerReplicas × Consumers`. |
 | `Db__MaxPoolSize` | cores + 5 | Npgsql connection-pool cap per worker process (API uses 20). Keeps `replicas × pool` under Postgres `max_connections`. |
 | `Worker__Prefetch` | 50 | RabbitMQ prefetch per consumer channel |
@@ -140,6 +166,23 @@ The AppHost starts Postgres with throughput-oriented settings (in `AppHost.cs`):
 `max_wal_size=8GB`, relaxed checkpoints, and **`synchronous_commit=off`** — the biggest win, since
 it stops fsync'ing the WAL on every commit. Each worker process caps its Npgsql pool
 (`Db__MaxPoolSize`, default cores+5) so up to ~10 processes stay within `max_connections`.
+
+### Producer vs consumer balance
+
+For the processed-throughput number to mean "worker capacity", the producers must stay *ahead*
+of the workers — i.e. the **Queue backlog should keep growing** during a run. If the backlog
+goes flat, the generator has become the bottleneck and you're measuring producer rate, not
+worker rate. Scale the producer:
+
+- **`Generator__Parallelism`** (default 64) — more concurrent in-flight requests from one
+  generator. A single generator is roughly latency-bound (≈ parallelism ÷ round-trip-time).
+- **`Scale__GeneratorReplicas`** — more generator processes, if one process is CPU-bound.
+
+Caveat measured on an 18-core machine: everything (generators, API, RabbitMQ, workers, Postgres)
+shares the same CPU. Once the box is saturated (~4–4.4k orders/sec here), pushing the producer
+*harder* grows the backlog but doesn't raise processed/sec — it slightly lowers it, because the
+busier generator steals CPU from the workers. So size the producer just high enough to keep the
+backlog growing, not maximal.
 
 ### Why throughput steps down / fluctuates
 

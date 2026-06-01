@@ -4,7 +4,7 @@
 //   Scale__ApiReplicas        (default 1)       – ASP.NET servers populating the queue
 //   Scale__WorkerReplicas     (default 3)       – worker PROCESSES draining the queue
 //   Scale__GeneratorReplicas  (default 1)       – console apps spamming the API
-//   Generator__Parallelism    (default 32)      – concurrent in-flight requests per generator
+//   Generator__Parallelism    (default 64)      – concurrent in-flight requests per generator
 //   Worker__Consumers         (default cores)   – consumer threads per worker process
 //   Worker__Prefetch          (default 50)      – RabbitMQ prefetch per consumer
 //   Worker__ExtraCpuIterations(default 0)       – optional extra CPU burn per order (stress mode)
@@ -17,7 +17,7 @@ int GetInt(string key, int def) => int.TryParse(cfg[key], out var v) ? v : def;
 
 int apiReplicas = GetInt("Scale:ApiReplicas", 1);
 int generatorReplicas = GetInt("Scale:GeneratorReplicas", 1);
-int generatorParallelism = GetInt("Generator:Parallelism", 32);
+int generatorParallelism = GetInt("Generator:Parallelism", 64);
 int workerPrefetch = GetInt("Worker:Prefetch", 50);
 int workerExtraCpu = GetInt("Worker:ExtraCpuIterations", 0);
 
