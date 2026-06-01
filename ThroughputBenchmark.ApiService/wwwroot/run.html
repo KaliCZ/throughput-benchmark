@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Benchmark run</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #0f1115; color: #e6e6e6; }
+    header { padding: 1.5rem 2rem; border-bottom: 1px solid #222; display: flex; align-items: baseline; gap: 1rem; }
+    h1 { margin: 0; font-size: 1.4rem; }
+    a { color: #58a6ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    main { padding: 2rem; max-width: 1000px; margin: 0 auto; }
+    button { font-size: 1rem; padding: 0.7rem 1.6rem; border: 0; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    .stop { background: #d1242f; color: white; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .controls { display: flex; gap: 1rem; align-items: center; margin-bottom: 2rem; }
+    .pill { padding: 0.3rem 0.8rem; border-radius: 999px; font-size: 0.85rem; background: #222; }
+    .pill.on { background: #133a1c; color: #4ade80; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .card { background: #161a22; border: 1px solid #222; border-radius: 10px; padding: 1rem 1.2rem; }
+    .card .label { font-size: 0.8rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.03em; }
+    .card .value { font-size: 1.8rem; font-weight: 700; margin-top: 0.3rem; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { text-align: right; padding: 0.4rem 0.7rem; border-bottom: 1px solid #1c2129; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: #8b949e; font-weight: 600; font-size: 0.8rem; }
+    .muted { color: #8b949e; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="index.html">← Runs</a>
+    <h1>⚡ Benchmark run</h1>
+    <span class="muted" id="startedAt"></span>
+  </header>
+  <main>
+    <div class="controls">
+      <span id="statusPill" class="pill">—</span>
+      <button id="stopBtn" class="stop" style="display:none" title="Stop the run and purge the queue so workers go idle">■ Stop</button>
+    </div>
+
+    <div class="cards">
+      <div class="card"><div class="label">Elapsed</div><div class="value" id="elapsed">—</div></div>
+      <div class="card"><div class="label">Enqueued</div><div class="value" id="enqueued">—</div></div>
+      <div class="card"><div class="label">Processed</div><div class="value" id="processed">—</div></div>
+      <div class="card"><div class="label">Queue backlog</div><div class="value" id="backlog">—</div></div>
+    </div>
+    <div class="cards">
+      <div class="card"><div class="label">Avg processed/sec</div><div class="value" id="avg">—</div></div>
+      <div class="card"><div class="label">Last 10s processed/sec</div><div class="value" id="last10">—</div></div>
+      <div class="card"><div class="label">Avg enqueued/sec</div><div class="value" id="avgEnq">—</div></div>
+      <div class="card"><div class="label">Last 10s enqueued/sec</div><div class="value" id="last10Enq">—</div></div>
+    </div>
+    <div class="cards">
+      <div class="card"><div class="label">Battery %</div><div class="value" id="battery">—</div></div>
+      <div class="card"><div class="label">Battery used</div><div class="value" id="batteryUsed">—</div></div>
+    </div>
+
+    <h3 style="display:flex; align-items:center; gap:0.8rem;">
+      Samples <span class="muted" id="sampleNote"></span>
+      <span style="margin-left:auto; font-size:0.85rem; font-weight:400;">
+        Show every
+        <select id="granularity" style="background:#161a22; color:#e6e6e6; border:1px solid #30363d; border-radius:6px; padding:0.2rem 0.4rem;">
+          <option value="auto" selected>Auto</option>
+          <option value="1">1s</option>
+          <option value="5">5s</option>
+          <option value="10">10s</option>
+          <option value="30">30s</option>
+          <option value="60">60s</option>
+        </select>
+      </span>
+    </h3>
+    <table>
+      <thead>
+        <tr><th>Elapsed</th><th>Processed/sec</th><th>Enqueued/sec</th><th>Processed total</th><th>Backlog</th><th>CPU %</th></tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="6" class="muted">No samples yet.</td></tr></tbody>
+    </table>
+  </main>
+
+  <script>
+    const id = new URLSearchParams(location.search).get('id');
+    const stopBtn = document.getElementById('stopBtn');
+    const statusPill = document.getElementById('statusPill');
+    const granularity = document.getElementById('granularity');
+    let interval = 1;
+    let lastElapsed = 0;
+    let pollTimer = null;
+
+    granularity.onchange = () => refresh();
+
+    function autoBucket(elapsed) {
+      if (elapsed < 15) return 1;     // 0–15s
+      if (elapsed < 60) return 5;     // 15s–1m
+      if (elapsed < 180) return 10;   // 1m–3m
+      if (elapsed < 600) return 30;   // 3m–10m
+      return 60;                      // 10m+
+    }
+
+    function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
+    function fmtElapsed(secs) {
+      secs = Math.round(secs);
+      if (secs < 60) return secs + 's';
+      return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+    }
+
+    stopBtn.onclick = async () => {
+      stopBtn.disabled = true;
+      try { await fetch('/api/benchmark/stop', { method: 'POST' }); } catch {}
+      refresh();
+    };
+
+    async function refresh() {
+      if (!id) { statusPill.textContent = 'no run id'; return; }
+      try {
+        const auto = granularity.value === 'auto';
+        const bucketParam = auto ? autoBucket(lastElapsed) : granularity.value;
+        const res = await fetch(`/api/benchmark/run/${id}?bucket=${bucketParam}`);
+        if (res.status === 404) {
+          statusPill.textContent = 'run not found';
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          return;
+        }
+        const data = await res.json();
+        interval = data.intervalSeconds || 1;
+
+        document.getElementById('startedAt').textContent =
+          data.startedAt ? new Date(data.startedAt).toLocaleString() : '';
+
+        if (data.isActive) {
+          let left = '';
+          if (data.endsAt) {
+            const secs = Math.max(0, Math.round((new Date(data.endsAt) - new Date()) / 1000));
+            const mm = Math.floor(secs / 60), ss = String(secs % 60).padStart(2, '0');
+            left = ` · ${mm}:${ss} left`;
+          }
+          statusPill.textContent = 'running' + left;
+          statusPill.className = 'pill on';
+          stopBtn.style.display = '';
+          stopBtn.disabled = false;
+        } else {
+          statusPill.textContent = (data.status || 'stopped').toLowerCase();
+          statusPill.className = 'pill';
+          stopBtn.style.display = 'none';
+        }
+
+        const samples = data.samples || [];
+        const last = samples[samples.length - 1];
+        lastElapsed = last ? last.elapsedSeconds : 0;
+        const processedTotal = last ? last.ordersProcessedTotal : 0;
+        const backlog = Math.max(0, data.enqueued - processedTotal);
+        document.getElementById('elapsed').textContent = last ? fmtElapsed(last.elapsedSeconds) : '—';
+        document.getElementById('enqueued').textContent = fmt(data.enqueued);
+        document.getElementById('processed').textContent = fmt(processedTotal);
+        document.getElementById('backlog').textContent = fmt(backlog);
+        document.getElementById('avg').textContent = fmt(Math.round(data.averagePerSecond));
+        document.getElementById('last10').textContent = fmt(Math.round(data.recentPerSecond || 0));
+        document.getElementById('avgEnq').textContent = fmt(Math.round(data.averageEnqueuedPerSecond || 0));
+        document.getElementById('last10Enq').textContent = fmt(Math.round(data.recentEnqueuedPerSecond || 0));
+        document.getElementById('battery').textContent = last && last.batteryPercent != null ? last.batteryPercent + '%' : '—';
+        const bu = document.getElementById('batteryUsed');
+        if (data.batteryChargedDuringRun) {
+          bu.textContent = '⚠';
+          bu.title = 'Plugged into AC / charged during the run — battery drain is not a valid measurement. Run unplugged from start to finish.';
+        } else if (data.batteryUsedPercent != null) {
+          bu.textContent = data.batteryUsedPercent + '%';
+          bu.title = '';
+        } else {
+          bu.textContent = '—';
+          bu.title = '';
+        }
+        const bucket = data.bucketSeconds || 1;
+        const mode = auto ? 'auto ' : '';
+        document.getElementById('sampleNote').textContent =
+          (bucket === 1 && !auto) ? `(every ${interval}s)` : `(${interval}s sampling · ${mode}${bucket}s rows)`;
+
+        const rows = document.getElementById('rows');
+        if (samples.length === 0) {
+          rows.innerHTML = '<tr><td colspan="6" class="muted">No samples.</td></tr>';
+        } else {
+          rows.innerHTML = samples.slice().reverse().map(s => `
+            <tr>
+              <td>${fmtElapsed(s.elapsedSeconds)}</td>
+              <td>${fmt(s.ordersProcessedPerSec)}</td>
+              <td>${fmt(s.ordersEnqueuedPerSec)}</td>
+              <td>${fmt(s.ordersProcessedTotal)}</td>
+              <td>${fmt(Math.max(0, s.ordersEnqueuedTotal - s.ordersProcessedTotal))}</td>
+              <td>${s.cpuPercent == null ? '—' : s.cpuPercent.toFixed(0) + '%'}</td>
+            </tr>`).join('');
+        }
+
+        // A finished run never changes again — stop polling once we've rendered it.
+        if (!data.isActive && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      } catch (e) { /* transient */ }
+    }
+
+    pollTimer = setInterval(refresh, 2000);
+    refresh();
+  </script>
+</body>
+</html>

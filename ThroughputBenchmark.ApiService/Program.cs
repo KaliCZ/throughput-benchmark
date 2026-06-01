@@ -161,16 +161,19 @@ app.MapGet("/api/benchmark/runs", async (BenchmarkState state, BenchmarkDbContex
     return Results.Ok(result);
 });
 
-// Current run + samples for the dashboard. `bucket` (seconds) downsamples the table for the
-// display only — the DB always keeps 1s resolution; the metric cards stay 1s-accurate.
-app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbContext db, int bucket = 1) =>
+// Detail of a single run — active OR historical — for the detail page. `bucket` (seconds)
+// downsamples the table for display only; the DB always keeps 1s resolution.
+app.MapGet("/api/benchmark/run/{id:guid}", async (Guid id, BenchmarkState state, BenchmarkDbContext db, int bucket = 1) =>
 {
-    var run = state.Current;
-    if (run is null) return Results.Ok(new { active = false });
+    var runRow = await db.BenchmarkRuns.FirstOrDefaultAsync(r => r.Id == id);
+    if (runRow is null) return Results.NotFound();
+
+    var active = state.Current;
+    bool isActive = active?.Id == id;
 
     // Last 2h of 1s samples (bounds memory on very long runs), ascending.
     var raw = await db.BenchmarkSamples
-        .Where(s => s.RunId == run.Id)
+        .Where(s => s.RunId == id)
         .OrderByDescending(s => s.SampledAt)
         .Take(7200)
         .Select(s => new
@@ -236,14 +239,19 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
         })
         .ToList();
 
+    long enqueued = isActive ? Interlocked.Read(ref active!.Enqueued)
+                             : (raw.Count > 0 ? raw[^1].OrdersEnqueuedTotal : 0);
+
     return Results.Ok(new
     {
-        active = true,
-        producing = run.Producing,
-        runId = run.Id,
-        startedAt = run.StartedAt,
-        endsAt = run.EndsAt,
-        enqueued = Interlocked.Read(ref run.Enqueued),
+        runId = runRow.Id,
+        isActive,
+        producing = isActive && active!.Producing,
+        status = runRow.Status.ToString(),
+        startedAt = runRow.StartedAt,
+        stoppedAt = runRow.StoppedAt,
+        endsAt = isActive ? active!.EndsAt : null,
+        enqueued,
         averagePerSecond = avgPerSec,
         recentPerSecond = recentPerSec,
         averageEnqueuedPerSecond = avgEnqPerSec,
