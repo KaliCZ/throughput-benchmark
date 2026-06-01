@@ -20,6 +20,7 @@ namespace ThroughputBenchmark.ApiService.Benchmarking;
 public sealed class SamplerService(
     BenchmarkState state,
     IServiceScopeFactory scopeFactory,
+    SystemMetrics systemMetrics,
     ILogger<SamplerService> logger) : BackgroundService
 {
     public const int IntervalSeconds = 1;
@@ -69,6 +70,7 @@ public sealed class SamplerService(
                 processedTotal += delta;
 
                 long enqueued = Interlocked.Read(ref run.Enqueued);
+                var sys = systemMetrics.Read();
                 db.BenchmarkSamples.Add(new BenchmarkSample
                 {
                     RunId = run.Id,
@@ -78,6 +80,10 @@ public sealed class SamplerService(
                     OrdersProcessedDelta = delta,
                     OrdersEnqueuedTotal = enqueued,
                     OrdersEnqueuedDelta = enqueued - lastEnqueued,
+                    CpuPercent = sys.CpuPercent,
+                    CpuTempC = sys.CpuTempC,
+                    PowerWatts = sys.PowerWatts,
+                    BatteryPercent = sys.BatteryPercent,
                 });
                 await db.SaveChangesAsync(stoppingToken);
 

@@ -25,6 +25,7 @@ builder.AddRabbitMQClient("messaging");
 
 builder.Services.AddSingleton<BenchmarkState>();
 builder.Services.AddSingleton<RabbitMqPublisher>();
+builder.Services.AddSingleton<SystemMetrics>();
 builder.Services.AddHostedService<SamplerService>();
 
 var app = builder.Build();
@@ -130,9 +131,20 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
             s.OrdersProcessedDelta,
             s.OrdersEnqueuedTotal,
             s.OrdersEnqueuedDelta,
+            s.CpuPercent,
+            s.CpuTempC,
+            s.PowerWatts,
+            s.BatteryPercent,
         })
         .ToListAsync();
     raw.Reverse();
+
+    // Average the present (non-null) values in a bucket; null if none are available.
+    static double? AvgOrNull(IEnumerable<double?> xs)
+    {
+        var present = xs.Where(x => x.HasValue).Select(x => x!.Value).ToList();
+        return present.Count > 0 ? Math.Round(present.Average(), 1) : null;
+    }
 
     // Cumulative average (per second) and a rolling last-10s rate — both from raw 1s data,
     // so they don't change with the chosen table granularity.
@@ -155,6 +167,10 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
             OrdersProcessedDelta = grp.Sum(x => x.OrdersProcessedDelta),
             OrdersEnqueuedTotal = grp.Last().OrdersEnqueuedTotal,
             OrdersEnqueuedDelta = grp.Sum(x => x.OrdersEnqueuedDelta),
+            CpuPercent = AvgOrNull(grp.Select(x => x.CpuPercent)),
+            CpuTempC = AvgOrNull(grp.Select(x => x.CpuTempC)),
+            PowerWatts = AvgOrNull(grp.Select(x => x.PowerWatts)),
+            BatteryPercent = grp.Last().BatteryPercent,
         })
         .ToList();
 

@@ -61,6 +61,13 @@ dotnet run --project ThroughputBenchmark.AppHost
    the rows for display — the DB always keeps 1s resolution, and the metric cards stay 1s-accurate.
    **Auto** (the default) coarsens the table as the run grows so it never gets unwieldy: 1s for the
    first 30s, then 5s, 10s at 2m, 30s at 5m, and 60s past 15m.
+5. Each sample also captures **host system metrics** — system-wide **CPU %**, **CPU temp**, and
+   **power draw** (table columns), plus a **Battery %** card — so you can correlate throughput with
+   load/thermals/drain. Availability varies by hardware:
+   - **CPU %** — always (Windows, via `GetSystemTimes`).
+   - **Power (W)** — battery discharge rate; only while **on battery** (shows "—" on AC).
+   - **CPU temp** — best-effort via WMI; often unavailable (e.g. shows "—" on ARM laptops).
+   - Non-Windows hosts simply report "—" for all of these (CPU% included); throughput still works.
 
 ### Control buttons
 

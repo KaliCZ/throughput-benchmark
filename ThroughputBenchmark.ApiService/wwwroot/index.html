@@ -51,6 +51,8 @@
     <div class="cards">
       <div class="card"><div class="label">Avg orders/sec</div><div class="value" id="avg">—</div></div>
       <div class="card"><div class="label">Last 10s avg/sec</div><div class="value" id="last10">—</div></div>
+      <div class="card"><div class="label">CPU %</div><div class="value" id="cpu">—</div></div>
+      <div class="card"><div class="label">Battery %</div><div class="value" id="battery">—</div></div>
     </div>
 
     <h3 style="display:flex; align-items:center; gap:0.8rem;">
@@ -69,9 +71,9 @@
     </h3>
     <table>
       <thead>
-        <tr><th>Elapsed (s)</th><th>Processed Δ</th><th>Enqueued Δ</th><th>Processed total</th><th>Backlog</th></tr>
+        <tr><th>Elapsed (s)</th><th>Processed Δ</th><th>Enqueued Δ</th><th>Processed total</th><th>Backlog</th><th>CPU %</th><th>Temp °C</th><th>Power W</th></tr>
       </thead>
-      <tbody id="rows"><tr><td colspan="5" class="muted">No samples yet.</td></tr></tbody>
+      <tbody id="rows"><tr><td colspan="8" class="muted">No samples yet.</td></tr></tbody>
     </table>
   </main>
 
@@ -150,6 +152,8 @@
         document.getElementById('backlog').textContent = fmt(backlog);
         document.getElementById('avg').textContent = fmt(Math.round(data.averagePerSecond));
         document.getElementById('last10').textContent = fmt(Math.round(data.recentPerSecond || 0));
+        document.getElementById('cpu').textContent = last && last.cpuPercent != null ? last.cpuPercent.toFixed(0) + '%' : '—';
+        document.getElementById('battery').textContent = last && last.batteryPercent != null ? last.batteryPercent + '%' : '—';
         const bucket = data.bucketSeconds || 1;
         const mode = auto ? 'auto ' : '';
         document.getElementById('sampleNote').textContent =
@@ -157,7 +161,7 @@
 
         const rows = document.getElementById('rows');
         if (samples.length === 0) {
-          rows.innerHTML = '<tr><td colspan="5" class="muted">Waiting for first sample…</td></tr>';
+          rows.innerHTML = '<tr><td colspan="8" class="muted">Waiting for first sample…</td></tr>';
         } else {
           rows.innerHTML = samples.slice().reverse().map(s => `
             <tr>
@@ -166,6 +170,9 @@
               <td>${fmt(s.ordersEnqueuedDelta)}</td>
               <td>${fmt(s.ordersProcessedTotal)}</td>
               <td>${fmt(Math.max(0, s.ordersEnqueuedTotal - s.ordersProcessedTotal))}</td>
+              <td>${s.cpuPercent == null ? '—' : s.cpuPercent.toFixed(0) + '%'}</td>
+              <td>${s.cpuTempC == null ? '—' : s.cpuTempC.toFixed(0)}</td>
+              <td>${s.powerWatts == null ? '—' : s.powerWatts.toFixed(1)}</td>
             </tr>`).join('');
         }
       } catch (e) { /* transient */ }
