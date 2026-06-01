@@ -34,7 +34,7 @@ enqueued total ÷ elapsed. Add a row per machine.
 
 | Machine / CPU | Avg processed/sec | Avg enqueued/sec |
 |---|---|---|
-| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,050 | 7,673 |
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,751 | 7,591 |
 
 ### 1 minute — on battery
 
@@ -43,6 +43,12 @@ enqueued total ÷ elapsed. Add a row per machine.
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,366 | 7,812 | 1% |
 
 ### 20 minutes — on battery, lowest screen brightness
+
+| Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used % |
+|---|---|---|---|
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | _TBD_ | _TBD_ | _TBD_ |
+
+### 20 minutes — on battery, highest screen brightness
 
 | Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used % |
 |---|---|---|---|
