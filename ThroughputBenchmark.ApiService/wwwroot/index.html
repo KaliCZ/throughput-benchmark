@@ -14,7 +14,6 @@
     .start { background: #2ea043; color: white; }
     .drain { background: #9a6700; color: white; }
     .stop { background: #d1242f; color: white; }
-    .wipe { background: #30363d; color: #e6e6e6; }
     button:disabled { opacity: 0.4; cursor: not-allowed; }
     .pill.drain { background: #3a2e13; color: #e3b341; }
     .controls { display: flex; gap: 1rem; align-items: center; margin-bottom: 2rem; }
@@ -39,7 +38,6 @@
       <button id="start20Btn" class="start" title="Run a fixed 20-minute benchmark, then auto-stop">▶ Run 20 min</button>
       <button id="startOpenBtn" class="start" title="Run with no time limit; stop manually">▶ Run (no limit)</button>
       <button id="stopBtn" class="stop" disabled title="Stop the run and purge the queue so workers go idle">■ Stop</button>
-      <button id="wipeBtn" class="wipe" title="Clear all order &amp; benchmark data (keeps seeded products/users)">🗑 Wipe DB</button>
       <span id="statusPill" class="pill">idle</span>
     </div>
 
@@ -95,7 +93,6 @@
     const start20Btn = document.getElementById('start20Btn');
     const startOpenBtn = document.getElementById('startOpenBtn');
     const stopBtn = document.getElementById('stopBtn');
-    const wipeBtn = document.getElementById('wipeBtn');
     const statusPill = document.getElementById('statusPill');
     const granularity = document.getElementById('granularity');
     let interval = 1;
@@ -122,12 +119,6 @@
     start20Btn.onclick = () => post('/api/benchmark/start?durationSeconds=1200', start20Btn);
     startOpenBtn.onclick = () => post('/api/benchmark/start', startOpenBtn);
     stopBtn.onclick = () => post('/api/benchmark/stop', stopBtn);
-    wipeBtn.onclick = async () => {
-      if (!confirm('Wipe all order & benchmark data? (Seeded products/users are kept.)')) return;
-      const res = await fetch('/api/benchmark/wipe', { method: 'POST' });
-      if (res.status === 409) alert('Stop the current run before wiping.');
-      refresh();
-    };
 
     function fmt(n) { return n == null ? '—' : Number(n).toLocaleString(); }
 
@@ -151,7 +142,6 @@
           start20Btn.disabled = false;
           startOpenBtn.disabled = false;
           stopBtn.disabled = true;
-          wipeBtn.disabled = false;
           lastElapsed = 0;
           return;
         }
@@ -169,7 +159,6 @@
         start20Btn.disabled = true;
         startOpenBtn.disabled = true;
         stopBtn.disabled = false;
-        wipeBtn.disabled = true;        // can't wipe mid-run
 
         const samples = data.samples || [];
         const last = samples[samples.length - 1];

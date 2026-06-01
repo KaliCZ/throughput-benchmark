@@ -91,19 +91,6 @@ app.MapPost("/api/benchmark/stop", async (BenchmarkState state, BenchmarkDbConte
     return Results.Ok(new { stopped = true, purged });
 });
 
-// Reset for the next run: purge the queue and clear all order + benchmark data
-// (the seeded Products/Users setup data is kept). Not allowed mid-run.
-app.MapPost("/api/benchmark/wipe", async (BenchmarkState state, BenchmarkDbContext db, RabbitMqPublisher publisher) =>
-{
-    if (state.Current is not null)
-        return Results.Conflict(new { error = "Stop the current run before wiping." });
-
-    await publisher.PurgeAsync();
-    await db.Database.ExecuteSqlRawAsync(
-        """TRUNCATE TABLE "OrderItems", "Payments", "Orders", "BenchmarkSamples", "BenchmarkRuns" RESTART IDENTITY CASCADE;""");
-    return Results.Ok(new { wiped = true });
-});
-
 // Lightweight status the load generators poll to decide whether to send load.
 app.MapGet("/api/benchmark/status", (BenchmarkState state) =>
 {
