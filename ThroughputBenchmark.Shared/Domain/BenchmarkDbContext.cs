@@ -19,8 +19,9 @@ public class BenchmarkDbContext(DbContextOptions<BenchmarkDbContext> options) : 
         b.Entity<Order>(e =>
         {
             e.Property(o => o.TotalAmount).HasPrecision(18, 2);
-            // The sampler counts processed orders per run; this index keeps that cheap.
-            e.HasIndex(o => new { o.RunId, o.Status });
+            // The sampler counts orders processed since the last tick via a ProcessedAt
+            // watermark; this composite index makes that an O(delta) range scan.
+            e.HasIndex(o => new { o.RunId, o.Status, o.ProcessedAt });
             e.HasMany(o => o.Items).WithOne().HasForeignKey(i => i.OrderId);
             e.HasOne(o => o.Payment).WithOne().HasForeignKey<Payment>(p => p.OrderId);
         });

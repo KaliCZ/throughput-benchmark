@@ -117,9 +117,11 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
     var run = state.Current;
     if (run is null) return Results.Ok(new { active = false });
 
+    // Most recent 600 samples (10 minutes at 1s) for the live view, ascending for display.
     var samples = await db.BenchmarkSamples
         .Where(s => s.RunId == run.Id)
-        .OrderBy(s => s.SampledAt)
+        .OrderByDescending(s => s.SampledAt)
+        .Take(600)
         .Select(s => new
         {
             s.ElapsedSeconds,
@@ -129,6 +131,7 @@ app.MapGet("/api/benchmark/current", async (BenchmarkState state, BenchmarkDbCon
             s.OrdersEnqueuedDelta,
         })
         .ToListAsync();
+    samples.Reverse();
 
     double avgPerSec = samples.Count > 0
         ? samples[^1].OrdersProcessedTotal / Math.Max(1, samples[^1].ElapsedSeconds)

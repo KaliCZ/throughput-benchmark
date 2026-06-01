@@ -47,8 +47,10 @@
       <div class="card"><div class="label">Enqueued</div><div class="value" id="enqueued">—</div></div>
       <div class="card"><div class="label">Processed</div><div class="value" id="processed">—</div></div>
       <div class="card"><div class="label">Queue backlog</div><div class="value" id="backlog">—</div></div>
-      <div class="card"><div class="label">Avg orders / 5s</div><div class="value" id="avg">—</div></div>
-      <div class="card"><div class="label">Last 5s (Δ)</div><div class="value" id="last">—</div></div>
+    </div>
+    <div class="cards">
+      <div class="card"><div class="label">Avg orders/sec</div><div class="value" id="avg">—</div></div>
+      <div class="card"><div class="label">Last 10s avg/sec</div><div class="value" id="last10">—</div></div>
     </div>
 
     <h3>Samples <span class="muted" id="sampleNote"></span></h3>
@@ -116,8 +118,11 @@
         document.getElementById('enqueued').textContent = fmt(data.enqueued);
         document.getElementById('processed').textContent = fmt(processedTotal);
         document.getElementById('backlog').textContent = fmt(backlog);
-        document.getElementById('avg').textContent = fmt(Math.round(data.averagePerSecond * interval));
-        document.getElementById('last').textContent = last ? fmt(last.ordersProcessedDelta) : '—';
+        document.getElementById('avg').textContent = fmt(Math.round(data.averagePerSecond));
+        const win = samples.slice(-10);
+        const winSecs = win.length * interval;
+        const winProcessed = win.reduce((a, s) => a + s.ordersProcessedDelta, 0);
+        document.getElementById('last10').textContent = winSecs ? fmt(Math.round(winProcessed / winSecs)) : '—';
         document.getElementById('sampleNote').textContent = `(every ${interval}s)`;
 
         const rows = document.getElementById('rows');

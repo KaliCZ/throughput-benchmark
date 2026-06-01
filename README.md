@@ -4,8 +4,8 @@ A small, real-world-ish workload for benchmarking a PC's local-development throu
 (and battery drain). It mirrors a typical backend: a web API takes order requests and
 drops them on a queue; background workers pull from the queue, read setup data from
 Postgres, build + serialize an invoice, and write the order back. A load generator spams
-the API while a benchmark run is active. Throughput is sampled into Postgres every 5
-seconds so you can chart average rate and spot spikes/slowdowns.
+the API while a benchmark run is active. Throughput is sampled into Postgres every
+second so you can chart per-second rate and spot spikes/slowdowns.
 
 ### What a worker does per order
 
@@ -27,7 +27,7 @@ Everything is orchestrated by **.NET Aspire**.
 ```
 LoadGenerator (console)  --HTTP-->  ApiService (ASP.NET)  --RabbitMQ-->  Worker(s)
    polls /status, spams                 enqueues order msgs                 fetch user+products from Postgres,
-   /api/orders while a run               5s sampler -> Postgres             run calculation, store Order+Items+Payment
+   /api/orders while a run               1s sampler -> Postgres             run calculation, store Order+Items+Payment
    is active                                                                back into Postgres
                                    \------------------ Postgres ------------------/
 ```
@@ -37,7 +37,7 @@ LoadGenerator (console)  --HTTP-->  ApiService (ASP.NET)  --RabbitMQ-->  Worker(
 | `ThroughputBenchmark.AppHost` | Aspire orchestrator (Postgres + RabbitMQ + pgAdmin + all services) |
 | `ThroughputBenchmark.ServiceDefaults` | Shared OpenTelemetry / health / service discovery |
 | `ThroughputBenchmark.Shared` | EF Core `BenchmarkDbContext`, entities, queue message contract |
-| `ThroughputBenchmark.ApiService` | Web server: order endpoint → queue, **Start/Stop control page**, 5s sampler |
+| `ThroughputBenchmark.ApiService` | Web server: order endpoint → queue, **Start/Stop control page**, 1s sampler |
 | `ThroughputBenchmark.Worker` | Queue consumer: fetch setup → calculate → store results |
 | `ThroughputBenchmark.LoadGenerator` | Console app that floods the API with order requests |
 
@@ -56,13 +56,13 @@ dotnet run --project ThroughputBenchmark.AppHost
 1. Open the **Aspire dashboard** URL printed in the console.
 2. Open the **`apiservice`** endpoint from the dashboard — that's the benchmark control page.
 3. Press **▶ Start**. The load generators detect the active run and start hammering the API.
-4. Watch the live cards/table: enqueued, processed, queue backlog, avg orders/sec, per-5s deltas.
+4. Watch the live cards/table: enqueued, processed, queue backlog, avg orders/sec, per-second deltas.
 
 ### Control buttons
 
 | Button | What it does |
 |---|---|
-| **▶ Start** | Begins a run: API accepts orders, generators send load, sampler records every 5s. |
+| **▶ Start** | Begins a run: API accepts orders, generators send load, sampler records every second. |
 | **⏸ Stop load** | Stops producing (API rejects new orders, generators idle) but **keeps workers draining** the existing queue. The run stays alive so you can watch the backlog burn down. |
 | **■ Stop & purge** | Stops producing **and purges the queue**, so workers immediately go idle (CPU drops). Ends the run. |
 | **🗑 Wipe DB** | Clears all order + benchmark data (keeps seeded products/users) so you can run a clean benchmark. Disabled mid-run. |
@@ -96,17 +96,45 @@ What that machine needs:
 - Enough RAM for the Postgres settings (`shared_buffers=2GB`); fine on any modern dev box.
 
 For a comparable score, run the same way on each machine (same buttons, similar run length) and
-compare the **avg orders/sec** plus the per-5s curve. If a machine's backlog stays flat, bump
+compare the **avg orders/sec** plus the per-second curve. If a machine's backlog stays flat, bump
 `Generator__Parallelism` there so the workers stay fed (see *Producer vs consumer balance*). The
 only fixed knobs are the Postgres server settings, which are sized to cover up to ~10 workers on
 any reasonable machine.
 
+## Benchmark results
+
+Default config (3 workers, 3 generators, one consumer/in-flight per core). Numbers are the
+run's averages: **processed/sec** = `averagePerSecond` from the page; **enqueued/sec** =
+enqueued total ÷ elapsed. Add a row per machine.
+
+### 1 minute — plugged in
+
+| Machine / CPU | Avg processed/sec | Avg enqueued/sec |
+|---|---|---|
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 3,189 | 7,012 |
+
+### 1 minute — on battery
+
+| Machine / CPU | Avg processed/sec | Avg enqueued/sec |
+|---|---|---|
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | _TBD_ | _TBD_ |
+
+### 30 minutes — on battery, lowest screen brightness
+
+| Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery used |
+|---|---|---|---|
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | _TBD_ | _TBD_ | _TBD_ |
+
+> The plugged-in row above was measured on AC. The battery rows are left blank to fill in under
+> those conditions (unplug / lowest brightness, no other heavy apps). "Battery used" = charge %
+> at start minus charge % at end of the 30-minute run.
+
 ## Results in Postgres
 
 - `BenchmarkRuns` — one row per run (started/stopped timestamps, machine name).
-- `BenchmarkSamples` — one row every 5 seconds with cumulative + delta counts for both
-  *enqueued* (accepted by the API) and *processed* (stored by a worker). Divide a delta by
-  the 5s interval for orders/sec at that moment; compare across samples to see spikes/dips.
+- `BenchmarkSamples` — one row every second with cumulative + delta counts for both
+  *enqueued* (accepted by the API) and *processed* (stored by a worker). At a 1s interval each
+  delta *is* orders/sec for that second; compare across samples to see spikes/dips.
 - `Orders` / `OrderItems` / `Payments` — the actual work output, tagged with `RunId`.
 
 ## Scaling knobs (the part to tune)
@@ -209,7 +237,7 @@ Things that were ruled out as the cause (worth knowing):
 
 ### Note on multiple API replicas
 
-The 5-second sampler and the in-memory "enqueued" counter live in the ApiService. With more
+The 1-second sampler and the in-memory "enqueued" counter live in the ApiService. With more
 than one API replica you'd get duplicate samples and a split enqueued count. Keep
 `Scale__ApiReplicas = 1` for now, **or** move `SamplerService` + the enqueued counter into a
 dedicated singleton service before scaling the API out. The *processed* count is read from
