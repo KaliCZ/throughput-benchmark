@@ -57,8 +57,10 @@ dotnet run --project ThroughputBenchmark.AppHost
 2. Open the **`apiservice`** endpoint from the dashboard — that's the benchmark control page.
 3. Press **▶ Start**. The load generators detect the active run and start hammering the API.
 4. Watch the live cards/table: enqueued, processed, queue backlog, avg orders/sec, per-second deltas.
-   The samples table has a **"Show every"** dropdown (1s / 5s / 10s / 30s / 60s) that buckets the
-   rows for display — the DB always keeps 1s resolution, and the metric cards stay 1s-accurate.
+   The samples table has a **"Show every"** dropdown (Auto / 1s / 5s / 10s / 30s / 60s) that buckets
+   the rows for display — the DB always keeps 1s resolution, and the metric cards stay 1s-accurate.
+   **Auto** (the default) coarsens the table as the run grows so it never gets unwieldy: 1s for the
+   first 30s, then 5s, 10s at 2m, 30s at 5m, and 60s past 15m.
 
 ### Control buttons
 
