@@ -54,7 +54,7 @@ enqueued total ÷ elapsed. Add a row per machine.
 
 | Machine / CPU | Avg processed/sec | Avg enqueued/sec | Battery Used % |
 |---|---|---|---|
-| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | _TBD_ | _TBD_ | _TBD_ |
+| **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,306 | 6,977 | 28% |
 
 > Read the values straight off the dashboard when the run auto-stops:
 > - **Avg processed/sec** / **Avg enqueued/sec** — the throughput cards.
