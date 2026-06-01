@@ -36,6 +36,7 @@ enqueued total ÷ elapsed. Add a row per machine.
 |---|---|---|
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,751 | 7,591 |
 | **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | 1,451 | 4,123 |
+| **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores | 4,087 | 4,648 |
 
 ### 1 minute — on battery
 
@@ -43,6 +44,7 @@ enqueued total ÷ elapsed. Add a row per machine.
 |---|---|---|---|
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,366 | 7,812 | 1% |
 | **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | 1,619 | 4,152 | 1% |
+| **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores | 3,758 | 4,191 | 2% |
 
 ### 20 minutes — on battery, lowest screen brightness
 
