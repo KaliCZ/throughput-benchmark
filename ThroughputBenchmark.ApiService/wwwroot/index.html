@@ -94,11 +94,11 @@
 
     // Auto mode coarsens the table as the run gets longer, so it stays readable.
     function autoBucket(elapsed) {
-      if (elapsed < 20) return 1;     // 0–20s
-      if (elapsed < 120) return 5;    // 20s–2m
-      if (elapsed < 300) return 10;   // 2m–5m
-      if (elapsed < 900) return 30;   // 5m–15m
-      return 60;                      // 15m+
+      if (elapsed < 15) return 1;     // 0–15s
+      if (elapsed < 60) return 5;     // 15s–1m
+      if (elapsed < 180) return 10;   // 1m–3m
+      if (elapsed < 600) return 30;   // 3m–10m
+      return 60;                      // 10m+
     }
 
     async function post(url, btn) {
