@@ -40,6 +40,7 @@ is double what the core figure suggests. Numbers are the run's averages: **proce
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,751 | 7,591 |
 | **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | 1,451 | 4,123 |
 | **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores / 32 threads | 4,087 | 4,648 |
+| **Apple MacBook Pro 14" (Nov 2023)**<br>Apple M3 Pro, 12 cores | 1,538 | 3,537 |
 
 ### 1 minute — on battery
 
@@ -48,6 +49,7 @@ is double what the core figure suggests. Numbers are the run's averages: **proce
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | 4,366 | 7,812 | 1% |
 | **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | 1,619 | 4,152 | 1% |
 | **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores / 32 threads | 3,758 | 4,191 | 2% |
+| **Apple MacBook Pro 14" (Nov 2023)**<br>Apple M3 Pro, 12 cores | 1,854 | 4,958 | 0% |
 
 ### 20 minutes — on battery
 
@@ -56,7 +58,8 @@ full-charge capacity; **Wh / 1M orders** = Wh used ÷ (avg processed/sec × 1,20
 better (more work per watt-hour). They're approximate: Windows reports charge as an integer %,
 so this is only meaningful on these 20-minute runs where the drain is large (it's why the
 1-minute battery tables above, at 1–2% drain, omit it). Full-charge capacities: ROG Strix
-**87.5 Wh** measured (90 Wh design); Zenbook A16 **70 Wh** and Zenbook 14 **75 Wh** (nominal spec).
+**87.5 Wh** measured (90 Wh design); Zenbook A16 **70 Wh** and Zenbook 14 **75 Wh** (nominal spec);
+MacBook Pro 14" **72.4 Wh** (Apple spec).
 
 | Machine / CPU | Brightness | Avg processed/sec | Avg enqueued/sec | Battery | Used % | Wh used | Wh / 1M orders |
 |---|---|---|---|---|---|---|---|
@@ -64,9 +67,11 @@ so this is only meaningful on these 20-minute runs where the drain is large (it'
 | **Asus A16 ARM**<br>Snapdragon X2 Elite Extreme (X2E94100), 18 cores | high | 4,306 | 6,977 | 70 Wh | 28% | 19.6 | **3.8** |
 | **Asus Zenbook 14 (UX3405CA)**<br>Intel Core Ultra 7 255H, 16 cores | low | 1,100 | 2,856 | 75 Wh | 12% | 9.0 | **6.8** |
 | **Asus ROG Strix G16 (G614PR)**<br>AMD Ryzen 9 8940HX, 16 cores / 32 threads | low | 3,337 | 3,378 | 87.5 Wh | 27% | 23.6 | **5.9** |
+| **Apple MacBook Pro 14" (Nov 2023)**<br>Apple M3 Pro, 12 cores | — | 1,854 | 5,297 | 72.4 Wh | 14% | 10.1 | **4.6** |
 
-> **Efficiency:** the Snapdragon's ~3.8 Wh/1M beats the Ryzen's 5.9 (~1.55×) and the Core
-> Ultra's 6.8. That edge over the Ryzen splits roughly evenly between two things: the Snapdragon
+> **Efficiency:** the Snapdragon's ~3.8 Wh/1M beats the M3 Pro's 4.6, the Ryzen's 5.9 (~1.55×)
+> and the Core Ultra's 6.8 — the M3 Pro lands second despite its much lower raw throughput.
+> The Snapdragon's edge over the Ryzen splits roughly evenly between two things: the Snapdragon
 > processes ~25% more orders per % of charge (chip/platform), **and** its 70 Wh battery is ~20%
 > smaller than the Ryzen's 87.5 Wh, so an identical 27% drain is less actual energy.
 
